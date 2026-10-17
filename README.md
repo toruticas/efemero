@@ -4,7 +4,7 @@ Compartilhamento temporário de mensagens e arquivos, com criptografia no navega
 
 ## Estado
 
-MVP implementado, com testes de protocolo, criptografia e ciclo de vida e CI aprovada no GitHub. A publicação e a integração real com Clerk/Blob/Neon dependem da configuração dos serviços. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação. O repositório remoto é `toruticas/efemero`, confirmado privado. O domínio de produção escolhido é `efemero.rafael.run`; sua associação ainda está pendente.
+Publicado em [efemero.rafael.run](https://efemero.rafael.run), com compartilhamento anônimo de mensagens e arquivos verificado em navegador real contra Neon e Blob privado. O login ainda depende da configuração DNS do Clerk. A CI passou com 32 testes, incluindo PostgreSQL real. O repositório `toruticas/efemero` é privado; alterações em `main` disparam deploy automático. O plano Vercel permanece Hobby, com limpeza diária e bloqueio imediato de acesso na expiração. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação.
 
 ## Requisitos acordados
 

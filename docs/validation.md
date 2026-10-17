@@ -1,10 +1,10 @@
-# Validação local — 17/10/2026
+# Validação — 17/10/2026
 
 ## Resultado
 
 - TypeScript: sem erros.
 - Build Next.js de produção: concluído, incluindo Web Worker da criptografia e rotas de API.
-- Vitest: 31 testes; execução padrão com PGlite e execução com PostgreSQL 17 real.
+- Vitest: 32 testes; execução padrão com PGlite e CI com PostgreSQL 17 real. Inclui fila diária maior que um lote de exclusão.
 - Formatação: Prettier e `git diff --check` sem erros.
 - `npm audit --omit=dev`: nenhuma vulnerabilidade conhecida reportada pelo registry nesta data. Isso não equivale a uma auditoria criptográfica.
 - HTTP no servidor de produção local: páginas inicial, abertura, informações, revogação e conta responderam; CSP com nonce por resposta foi compatível com os scripts renderizados; cabeçalhos de não armazenamento e bloqueio de frames presentes.
@@ -20,14 +20,23 @@ O PostgreSQL real usa conexões independentes para testar concorrência. O adapt
 
 O acesso a `toruticas/efemero` foi liberado em 17/10/2026. Tanto a integração quanto o CLI confirmaram a visibilidade privada e a permissão de escrita. O commit inicial remoto, contendo apenas o título no README, foi incorporado ao histórico local, mantendo o README completo da aplicação.
 
-## Verificações externas pendentes
+## Produção e navegador real
 
-- Neon, Blob privado e segredos de produção provisionados; migração aplicada no Neon pela integração autenticada. Verificar a conexão da aplicação publicada com esses recursos.
-- Configurar Clerk e verificar cadastro, entrada e sessão reais.
-- Fazer upload, callback e download contra o Blob real.
-- Exercitar o Web Worker e o CSP em navegador real, inclusive nos dispositivos móveis previstos.
-- Publicar e validar o endereço implantado. Nenhuma publicação foi executada nesta etapa.
+- HTTPS em `efemero.rafael.run`: resposta 200 com certificado validado, CSP com nonce e `no-store`. Página inicial sem erros de JavaScript em Chromium.
+- Integração Git: push em `main` criou automaticamente um deployment de produção na região `iad1`, sem publicação manual necessária.
+- Mensagem: registro OPAQUE, cifragem pelo Web Worker, upload privado e commit reais. Abertura em outro contexto do navegador recuperou o texto corretamente. A senha incorreta não produziu entrega. As requisições observadas não continham a senha nem o texto em claro; o link não tinha fragmento.
+- Arquivo: upload real, recuperação de nome original e download com bytes idênticos ao arquivo sintético. Revogação retornou 200 e nova tentativa com a senha correta foi bloqueada.
+- Limite de uma liberação: primeira entrega autorizada funcionou; nova tentativa recebeu 404 no início da autenticação, sem chamar o endpoint de entrega. O banco confirmou remoção do registro OPAQUE e do envelope no estado `exhausted`.
+- Prazo de um minuto: nova tentativa após a expiração recebeu 404, sem entrega, antes de executar uma limpeza posterior ao prazo. O bloqueio não depende do cron.
+- Limpeza: chamada sem credencial recebeu 403; chamada com o segredo configurado recebeu 200 e processou a fila. A janela de segurança dos uploads permaneceu respeitada.
+- Viewport móvel em Chromium: sem rolagem horizontal, formulário e botão de criação visíveis, sem erros de JavaScript. Não equivale a teste em Safari/iPhone real.
 
-O domínio `efemero.rafael.run` foi associado ao projeto Vercel e verificado. O primeiro pedido de deploy recebeu `cron_jobs_limits_reached`: o plano Hobby não permite o cron por minuto configurado. O proprietário autorizou a rotina diária, e o cron foi ajustado para `0 3 * * *`. As chaves Clerk chegaram ao projeto em produção e preview; login real ainda não foi testado. Uma tentativa local de upload ao Blob não validou o storage: a listagem de variáveis retornou o valor cifrado, que não pode ser usado como token. O token correto permanece protegido na Vercel para uso pelo deployment.
+A execução no navegador revelou uma incompatibilidade entre o CSP inicial e o endpoint de upload do SDK, `https://vercel.com/api/blob/`. O CSP foi corrigido para permitir apenas esse caminho e sua forma sem barra; o upload real passou depois da correção. As origens de scripts permanecem restritas por nonce.
 
-O código está preparado para esses serviços, mas os resultados locais não comprovam permissões, integração, região ou retenção dos provedores externos.
+## Pendências
+
+- DNS do Clerk: `/sign-in` retorna HTML, mas o script em `clerk.rafael.run` não carrega. A consulta pública não apresentou CNAME para `clerk.rafael.run` nem `accounts.rafael.run`. Configurar os registros exatos fornecidos pelo recurso Clerk e então verificar cadastro, entrada, sessão, username e histórico.
+- Confirmar a execução automática diária pelo agendador. A rota e sua autorização foram testadas manualmente; o teste não espera a próxima janela diária.
+- Exercitar Safari/iOS real e transferências no tamanho máximo em redes móveis antes de ampliar o uso.
+
+Os testes usaram apenas artefatos sintéticos. Não comprovam prazos internos de retenção, backups ou caches dos provedores. O plano Vercel permanece Hobby; nenhuma mudança para plano pago foi realizada.

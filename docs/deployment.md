@@ -12,17 +12,17 @@ Configure `APP_ORIGIN=https://efemero.rafael.run` somente no ambiente de produç
 
 Associe esse hostname ao projeto `efemero` e obtenha os registros DNS e eventuais desafios de propriedade que a Vercel retornar. Não use um destino CNAME genérico. A associação só estará concluída depois de verificar DNS, certificado HTTPS e os fluxos da aplicação nesse endereço.
 
-Em 17/10/2026, o acesso à equipe foi liberado. O projeto `prj_VQR4e2oJNhmkv8lgCe4dpQ3RSLAC` pertence à equipe `team_iE6kuuhAKPwML0NhvJVmmrPj` (`vercel-toruticascos-projects`). A Vercel confirmou a associação de `efemero.rafael.run` com `verified: true` e DNS sem configuração incorreta. Isso ainda não comprova a publicação da aplicação nem seu funcionamento em HTTPS.
+O projeto `prj_VQR4e2oJNhmkv8lgCe4dpQ3RSLAC` pertence à equipe `team_iE6kuuhAKPwML0NhvJVmmrPj` (`vercel-toruticascos-projects`). `efemero.rafael.run` está associado, verificado e publicado por HTTPS. A publicação automática de `70f304a` foi confirmada em `dpl_FrW5sgL2LhPw4yQNEmwaxaqbSqy4`; as entregas anônimas foram exercitadas em Chromium contra os serviços reais.
 
 ## Estado do provisionamento
 
 - Neon: projeto `old-tooth-31877519`, branch `br-morning-sound-b8fxg85q` (`production`), banco `efemero`, PostgreSQL 17 em `aws-us-east-1`. Migração `001_initial` aplicada em transação pela integração autenticada e confirmada na tabela de versões. Pool de conexões habilitado e histórico de restauração configurado em zero.
 - Blob: store `store_UDExr0Rlu7Ri4KZG` (`efemero-production`), acesso privado, região `iad1`.
-- Variáveis do serviço configuradas somente em produção, incluindo os segredos OPAQUE e a conexão ao banco. O token Blob também foi restringido a produção e marcado como sensível. Sua leitura local não foi validada; valores cifrados de listagens de metadados não são credenciais utilizáveis.
-- Clerk instalado na equipe: configuração `icfg_HRrgUWb30vz3mQ90d8bPt7gr`, plano Hobby. As duas chaves Clerk chegaram ao projeto para produção e preview, confirmando o vínculo. O login real ainda precisa ser validado na aplicação publicada.
-- O proprietário escolheu manter o plano Hobby e executar a limpeza diariamente. O cron foi ajustado para `0 3 * * *`; o bloqueio por expiração continua imediato e independente do agendador. A configuração anterior por minuto foi recusada pelo plano, sem criar um deployment.
+- Variáveis do serviço configuradas somente em produção, incluindo os segredos OPAQUE e a conexão ao banco. O token Blob foi restringido a produção e marcado como sensível. Upload, commit, leitura e download foram validados pela aplicação publicada, sem copiar esse token para o navegador.
+- Clerk instalado na equipe: configuração `icfg_HRrgUWb30vz3mQ90d8bPt7gr`, plano Hobby, produto `clerk-alizarin-grass`. As duas chaves Clerk chegaram ao projeto para produção e preview. O Frontend API configurado é `clerk.rafael.run`, mas o navegador não consegue carregar seu script e o DNS público não apresenta o CNAME. O login fica pendente dos registros DNS solicitados pelo Clerk; use os valores apresentados no recurso, sem inventar destinos. `accounts.rafael.run` também não apresenta CNAME na consulta pública.
+- Plano Hobby mantido. O cron `0 3 * * *` agenda a limpeza diária, com vários lotes dentro de um orçamento de execução; a resposta indica `limited: true` se houver trabalho restante por limite de tempo ou de lotes. A inicialização das exclusões usa uma operação SQL em lote. O bloqueio por expiração é imediato e independente do agendador.
 
-O script de migração usa a importação padrão de `@next/env`, compatível com a execução ESM no Node.js 24. A conexão WebSocket ao Neon a partir deste ambiente de desenvolvimento não foi validada; a aplicação de produção ainda exige teste real. Não copie os segredos locais para documentação ou para o Git.
+O script de migração usa a importação padrão de `@next/env`, compatível com a execução ESM no Node.js 24. A conexão WebSocket da aplicação ao Neon foi validada em produção. Não copie os segredos locais para documentação ou para o Git.
 
 ## Região
 
