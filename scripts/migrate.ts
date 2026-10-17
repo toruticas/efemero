@@ -1,8 +1,8 @@
-import { loadEnvConfig } from "@next/env";
+import nextEnv from "@next/env";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import WebSocket from "ws";
 import { readFile } from "node:fs/promises";
-loadEnvConfig(process.cwd());
+nextEnv.loadEnvConfig(process.cwd());
 neonConfig.webSocketConstructor = WebSocket;
 async function main() {
   if (!process.env.DATABASE_URL)

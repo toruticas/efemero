@@ -22,10 +22,12 @@ O acesso a `toruticas/efemero` foi liberado em 17/10/2026. Tanto a integração 
 
 ## Verificações externas pendentes
 
-- Configurar Neon, Blob privado e segredos no ambiente de destino.
+- Neon, Blob privado e segredos de produção provisionados; migração aplicada no Neon pela integração autenticada. Verificar a conexão da aplicação publicada com esses recursos.
 - Configurar Clerk e verificar cadastro, entrada e sessão reais.
 - Fazer upload, callback e download contra o Blob real.
 - Exercitar o Web Worker e o CSP em navegador real, inclusive nos dispositivos móveis previstos.
 - Publicar e validar o endereço implantado. Nenhuma publicação foi executada nesta etapa.
+
+O domínio `efemero.rafael.run` foi associado ao projeto Vercel e verificado. O primeiro pedido de deploy recebeu `cron_jobs_limits_reached`: o plano Hobby não permite o cron por minuto configurado. A escolha da frequência e a instalação do Clerk ainda estão pendentes. Uma tentativa local de upload ao Blob não validou o storage: a listagem de variáveis retornou o valor cifrado, que não pode ser usado como token. O token correto permanece protegido na Vercel para uso pelo deployment.
 
 O código está preparado para esses serviços, mas os resultados locais não comprovam permissões, integração, região ou retenção dos provedores externos.

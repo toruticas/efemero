@@ -12,7 +12,17 @@ Configure `APP_ORIGIN=https://efemero.rafael.run` somente no ambiente de produç
 
 Associe esse hostname ao projeto `efemero` e obtenha os registros DNS e eventuais desafios de propriedade que a Vercel retornar. Não use um destino CNAME genérico. A associação só estará concluída depois de verificar DNS, certificado HTTPS e os fluxos da aplicação nesse endereço.
 
-Em 17/10/2026, a Vercel confirmou a criação do projeto `prj_VQR4e2oJNhmkv8lgCe4dpQ3RSLAC` na equipe `team_iE6kuuhAKPwML0NhvJVmmrPj` (`vercel-toruticascos-projects`). A consulta seguinte ao projeto e a associação do domínio receberam HTTP 403 por falta de autorização da integração para essa equipe. Não crie outro projeto para contornar esse bloqueio. A consulta pública ao DNS confirmou os nameservers da Vercel para `rafael.run`; nenhum registro foi alterado e o subdomínio ainda não foi associado por esta sessão.
+Em 17/10/2026, o acesso à equipe foi liberado. O projeto `prj_VQR4e2oJNhmkv8lgCe4dpQ3RSLAC` pertence à equipe `team_iE6kuuhAKPwML0NhvJVmmrPj` (`vercel-toruticascos-projects`). A Vercel confirmou a associação de `efemero.rafael.run` com `verified: true` e DNS sem configuração incorreta. Isso ainda não comprova a publicação da aplicação nem seu funcionamento em HTTPS.
+
+## Estado do provisionamento
+
+- Neon: projeto `old-tooth-31877519`, branch `br-morning-sound-b8fxg85q` (`production`), banco `efemero`, PostgreSQL 17 em `aws-us-east-1`. Migração `001_initial` aplicada em transação pela integração autenticada e confirmada na tabela de versões. Pool de conexões habilitado e histórico de restauração configurado em zero.
+- Blob: store `store_UDExr0Rlu7Ri4KZG` (`efemero-production`), acesso privado, região `iad1`.
+- Variáveis do serviço configuradas somente em produção, incluindo os segredos OPAQUE e a conexão ao banco. O token Blob também foi restringido a produção e marcado como sensível. Sua leitura local não foi validada; valores cifrados de listagens de metadados não são credenciais utilizáveis.
+- Clerk ainda precisa ser instalado e conectado ao projeto pelo proprietário em [Clerk no Marketplace](https://vercel.com/marketplace/clerk).
+- A tentativa de deploy foi recusada pelo plano Hobby por causa do cron a cada minuto. Nenhum deployment foi criado. A frequência da limpeza aguarda decisão do proprietário; o bloqueio por expiração continua independente do agendador.
+
+O script de migração usa a importação padrão de `@next/env`, compatível com a execução ESM no Node.js 24. A conexão WebSocket ao Neon a partir deste ambiente de desenvolvimento não foi validada; a aplicação de produção ainda exige teste real. Não copie os segredos locais para documentação ou para o Git.
 
 ## Região
 
