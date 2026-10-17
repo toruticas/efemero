@@ -20,6 +20,14 @@ describe("response security policy", () => {
       expect(policy).toContain("'wasm-unsafe-eval'");
       expect(policy).not.toContain("'unsafe-eval'");
       expect(policy).not.toContain("script-src 'unsafe-inline'");
+      const connectSources = policy
+        .split(";")
+        .find((directive) => directive.trim().startsWith("connect-src"))!
+        .trim()
+        .split(/\s+/);
+      expect(connectSources).toContain("https://vercel.com/api/blob");
+      expect(connectSources).toContain("https://vercel.com/api/blob/");
+      expect(connectSources).not.toContain("https://vercel.com");
       const nonce = policy.match(/'nonce-([^']+)'/)![1];
       expect(a.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
       expect(b.headers.get("content-security-policy")).not.toContain(

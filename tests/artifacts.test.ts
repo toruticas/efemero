@@ -3,6 +3,7 @@ import * as opaque from "@serenity-kit/opaque";
 import { randomBytes } from "node:crypto";
 import { ArtifactService } from "@/server/artifacts";
 import { rateLimit } from "@/server/rate-limit";
+import { dailyCleanup } from "@/server/daily-cleanup";
 import { encryptArtifact, decryptArtifact } from "@/lib/crypto";
 import { KEY_STRETCHING } from "@/lib/protocol";
 import type { Storage } from "@/server/storage";
@@ -321,6 +322,32 @@ describe("artifact protocol and lifecycle", () => {
     expect(row.registration_record).toBeNull();
     expect(row.wrapped_key).toBeNull();
     expect(row.management_hash).toBe("");
+  });
+  it("drains a daily backlog larger than one cleanup batch", async () => {
+    const first = opaque.client.startRegistration({ password });
+    for (let i = 0; i < 25; i++) {
+      const a = await service.reserve(
+        {
+          mode: "anonymous",
+          size: 64,
+          ttlMinutes: 1,
+          maxReleases: null,
+          registrationRequest: first.registrationRequest,
+        },
+        null,
+      );
+      await service.issueUpload(a.id, a.managementToken, a.pathname);
+      objects.set(a.pathname, new ArrayBuffer(64));
+    }
+    now = new Date(now.getTime() + 17 * 60_000);
+    const result = await dailyCleanup(service);
+    expect(result.deleted).toBe(25);
+    expect(result.limited).toBe(false);
+    expect(objects.size).toBe(0);
+    const remaining = await database.db.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM artifacts WHERE purged_at IS NULL",
+    );
+    expect(Number(remaining.rows[0].count)).toBe(0);
   });
   it("isolates identical passwords across artifacts", async () => {
     const a = await create(),

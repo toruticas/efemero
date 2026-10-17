@@ -32,7 +32,7 @@ export default async function proxy(
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
     "img-src 'self' data: blob: https://img.clerk.com https://images.clerk.dev",
-    `connect-src 'self' https://blob.vercel-storage.com https://*.blob.vercel-storage.com ${authOrigin} https://*.clerk.accounts.dev https://*.clerk.com${dev ? " ws: http://localhost:*" : ""}`,
+    `connect-src 'self' https://vercel.com/api/blob https://vercel.com/api/blob/ https://blob.vercel-storage.com https://*.blob.vercel-storage.com ${authOrigin} https://*.clerk.accounts.dev https://*.clerk.com${dev ? " ws: http://localhost:*" : ""}`,
     `frame-src ${authOrigin || "'self'"} https://challenges.cloudflare.com`,
     "worker-src 'self'",
     "form-action 'self'",

@@ -3,6 +3,7 @@ import { required } from "@/server/config";
 import { unauthorized } from "@/server/errors";
 import { equalSecret } from "@/server/secrets";
 import { artifacts } from "@/server/services";
+import { dailyCleanup } from "@/server/daily-cleanup";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export const GET = route(async (request) => {
@@ -13,5 +14,5 @@ export const GET = route(async (request) => {
     )
   )
     throw unauthorized();
-  return json(await artifacts().cleanup());
+  return json(await dailyCleanup(artifacts()));
 });

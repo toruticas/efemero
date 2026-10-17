@@ -440,29 +440,18 @@ export class ArtifactService {
   async cleanup(limit = 20) {
     const now = this.clock();
     await this.db.transaction(async (tx) => {
-      const expired = await tx.query<
-        Row & {
-          id: string;
-          pending_expires_at: Date;
-          delete_after: Date | null;
-        }
-      >(
-        `UPDATE artifacts SET state='expired',registration_record=NULL,wrapped_key=NULL WHERE purged_at IS NULL
-        AND ((state='ready' AND expires_at<=$1) OR (state='pending' AND pending_expires_at<=$1)) RETURNING id,pending_expires_at,delete_after`,
+      await tx.query(
+        `WITH expired AS (
+          UPDATE artifacts SET state='expired',registration_record=NULL,wrapped_key=NULL WHERE purged_at IS NULL
+          AND ((state='ready' AND expires_at<=$1) OR (state='pending' AND pending_expires_at<=$1))
+          RETURNING id,pending_expires_at,delete_after
+        ) INSERT INTO cleanup_jobs(artifact_id,not_before)
+          SELECT id,GREATEST($1::timestamptz,pending_expires_at+INTERVAL '90 seconds',delete_after)
+          FROM expired WHERE true
+          ON CONFLICT(artifact_id) DO UPDATE
+          SET not_before=GREATEST(cleanup_jobs.not_before,EXCLUDED.not_before)`,
         [now],
       );
-      for (const a of expired.rows)
-        await enqueue(
-          tx,
-          a.id,
-          new Date(
-            Math.max(
-              now.getTime(),
-              asDate(a.pending_expires_at).getTime() + 90_000,
-              a.delete_after ? asDate(a.delete_after).getTime() : 0,
-            ),
-          ),
-        );
       await tx.query("DELETE FROM handshakes WHERE expires_at<=$1", [now]);
       await tx.query("DELETE FROM rate_limits WHERE expires_at<=$1", [now]);
     });
