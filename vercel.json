@@ -1,5 +1,5 @@
 {
   "regions": ["iad1"],
-  "crons": [{ "path": "/api/cron/cleanup", "schedule": "* * * * *" }],
+  "crons": [{ "path": "/api/cron/cleanup", "schedule": "0 3 * * *" }],
   "functions": { "src/app/api/**/route.ts": { "maxDuration": 60 } }
 }

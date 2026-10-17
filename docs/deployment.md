@@ -19,8 +19,8 @@ Em 17/10/2026, o acesso à equipe foi liberado. O projeto `prj_VQR4e2oJNhmkv8lgC
 - Neon: projeto `old-tooth-31877519`, branch `br-morning-sound-b8fxg85q` (`production`), banco `efemero`, PostgreSQL 17 em `aws-us-east-1`. Migração `001_initial` aplicada em transação pela integração autenticada e confirmada na tabela de versões. Pool de conexões habilitado e histórico de restauração configurado em zero.
 - Blob: store `store_UDExr0Rlu7Ri4KZG` (`efemero-production`), acesso privado, região `iad1`.
 - Variáveis do serviço configuradas somente em produção, incluindo os segredos OPAQUE e a conexão ao banco. O token Blob também foi restringido a produção e marcado como sensível. Sua leitura local não foi validada; valores cifrados de listagens de metadados não são credenciais utilizáveis.
-- Clerk instalado na equipe: configuração `icfg_HRrgUWb30vz3mQ90d8bPt7gr`, plano Hobby. A integração ainda não lista projetos conectados e as duas chaves Clerk não estão nas variáveis do projeto `efemero`; a vinculação ainda está pendente.
-- A tentativa de deploy foi recusada pelo plano Hobby por causa do cron a cada minuto. Nenhum deployment foi criado. A frequência da limpeza aguarda decisão do proprietário; o bloqueio por expiração continua independente do agendador.
+- Clerk instalado na equipe: configuração `icfg_HRrgUWb30vz3mQ90d8bPt7gr`, plano Hobby. As duas chaves Clerk chegaram ao projeto para produção e preview, confirmando o vínculo. O login real ainda precisa ser validado na aplicação publicada.
+- O proprietário escolheu manter o plano Hobby e executar a limpeza diariamente. O cron foi ajustado para `0 3 * * *`; o bloqueio por expiração continua imediato e independente do agendador. A configuração anterior por minuto foi recusada pelo plano, sem criar um deployment.
 
 O script de migração usa a importação padrão de `@next/env`, compatível com a execução ESM no Node.js 24. A conexão WebSocket ao Neon a partir deste ambiente de desenvolvimento não foi validada; a aplicação de produção ainda exige teste real. Não copie os segredos locais para documentação ou para o Git.
 
@@ -71,7 +71,7 @@ O provider e os scripts do Clerk ficam na área de contas; a página compartilha
 
 ## Limpeza e limites
 
-`/api/cron/cleanup` exige `Authorization: Bearer <CRON_SECRET>`. O agendamento de minuto em minuto requer plano Vercel compatível. Uma alternativa é um agendador externo autenticado. O bloqueio do artefato verifica o prazo em cada requisição e independe da execução do cron.
+`/api/cron/cleanup` exige `Authorization: Bearer <CRON_SECRET>`. O cron `0 3 * * *` agenda uma execução diária, compatível com o plano Hobby escolhido pelo proprietário. Nesse plano o horário pode variar dentro da janela da plataforma. A rotina remove objetos cujo prazo e janela de segurança já terminaram e repete exclusões que falharam; ela não faz deploy. O bloqueio do artefato verifica o prazo em cada requisição e independe da execução do cron. Deploys acompanham alterações de código na branch principal (`main`), via integração Git.
 
 - Arquivo: até 25 MiB; mensagem: até 256 KiB.
 - Prazo: de 1 minuto a 7 dias, contado da reserva inicial.

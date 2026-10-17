@@ -20,9 +20,9 @@ export default function About() {
       <h2>O prazo bloqueia novas entregas</h2>
       <p>
         Quando o prazo termina ou o limite de liberações é atingido, o serviço
-        bloqueia novas entregas. A limpeza remove o conteúdo em segundo plano,
-        com novas tentativas quando necessário. A infraestrutura pode levar
-        algum tempo para remover todas as cópias internas e caches.
+        bloqueia novas entregas. Uma rotina diária remove o conteúdo em segundo
+        plano, com novas tentativas quando necessário. A infraestrutura pode
+        levar algum tempo para remover todas as cópias internas e caches.
       </p>
       <h2>Um acesso significa uma entrega autorizada</h2>
       <p>
