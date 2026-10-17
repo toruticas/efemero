@@ -61,4 +61,3 @@ O painel retém apenas o histórico mínimo com política de retenção document
 Limite inicial pretendido de 25 MB por artefato. Upload direto ao Blob privado e download por streaming. Vercel Cron para limpeza frequente depende de plano compatível; o bloqueio temporal funciona independentemente do cron. A configuração de serviços reais e segredos ocorre por canais seguros, nunca por commits.
 
 Publicação e exposição pública exigem comportamento completo e serviços configurados. Não substituir o produto por uma demonstração que entregue ciphertext antes da autenticação ou que guarde senhas/chaves em claro.
-

@@ -4,7 +4,7 @@ Compartilhamento temporário de mensagens e arquivos, com criptografia no navega
 
 ## Estado
 
-Repositório em preparação. A aplicação ainda não foi implementada nem publicada. O repositório remoto deverá ser privado desde a criação.
+MVP implementado localmente, com testes de protocolo, criptografia e ciclo de vida. A publicação e a integração real com Clerk/Blob/Neon dependem da configuração dos serviços. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação. O repositório remoto deve ser privado desde a criação.
 
 ## Requisitos acordados
 
@@ -17,13 +17,41 @@ Repositório em preparação. A aplicação ainda não foi implementada nem publ
 - Clerk autentica os criadores; usuários autenticados têm username e histórico de metadados.
 - Artefatos anônimos possuem credencial de revogação independente do acesso compartilhado.
 
-## Tecnologias previstas
+## Tecnologias
 
-Next.js e TypeScript na Vercel, Neon/Postgres, Vercel Blob privado, Clerk e implementação existente de OPAQUE para navegador e Node.js. A escolha da biblioteca requer validação de formato, parâmetros, manutenção e compatibilidade antes da implementação.
+Next.js 16, React 19, TypeScript, Neon/Postgres, Vercel Blob privado, Clerk e `@serenity-kit/opaque` 1.1.0 (Rust/WASM). A versão do protocolo e os identificadores são vinculados ao artefato. O perfil Argon2id `memory-constrained` da biblioteca usa 64 MiB, 3 iterações e paralelismo 4. Criptografia e OPAQUE executam em Web Worker no navegador.
 
 Veja [as decisões de arquitetura](docs/architecture.md).
+
+## Executar
+
+Requer Node.js 22 ou superior; a CI usa Node.js 24.
+
+```sh
+npm ci
+cp .env.example .env.local
+npm run setup:secrets
+# Preencha APP_ORIGIN, DATABASE_URL e BLOB_READ_WRITE_TOKEN em .env.local.
+# Configure as chaves do Clerk para habilitar a área autenticada.
+npm run db:migrate
+npm run dev
+```
+
+O gerador cria apenas os segredos ausentes, preserva os existentes e não exibe os valores. `.env.local` é ignorado pelo Git. No modo sem configuração, as telas permanecem acessíveis, mas o compartilhamento fica desabilitado.
+
+## Validar
+
+```sh
+npm run typecheck
+npm test
+npm run format:check
+npm run build
+```
+
+Por padrão os testes SQL usam PGlite. Para executar os mesmos testes com conexões concorrentes em PostgreSQL real, defina `TEST_DATABASE_URL` para um banco descartável. A suíte cria um schema isolado e o remove ao terminar. A CI usa PostgreSQL 17.
+
+Veja [configuração e publicação na Vercel](docs/deployment.md) e [protocolo implementado](docs/protocol.md).
 
 ## Limites de segurança
 
 O serviço controla novas entregas, sem poder apagar cópias já recebidas. Uma liberação autorizada não comprova leitura humana ou conclusão do download. Senhas fracas continuam vulneráveis a palpites; um comprometimento que obtenha o material OPRF e os registros permite tentativas offline. O operador também possui capacidade técnica para testar palpites. Um navegador ou frontend comprometido pode capturar os dados durante o uso.
-
