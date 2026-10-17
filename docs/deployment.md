@@ -6,9 +6,9 @@ O repositório informado pelo proprietário é [`toruticas/efemero`](https://git
 
 ## Domínio principal
 
-O domínio escolhido é **efêmero.rafael.run**. Sua representação ASCII (IDNA/Punycode), usada no DNS e na configuração da Vercel, é `xn--efmero-jva.rafael.run`. São duas representações do mesmo endereço.
+O domínio escolhido é **efemero.rafael.run**, inteiramente em ASCII e sem acento. O nome do produto e do projeto é **Efemero**.
 
-Configure `APP_ORIGIN=https://xn--efmero-jva.rafael.run` somente no ambiente de produção. O código normaliza a origem com `URL`, compatível com o formato que o navegador envia no cabeçalho Origin. Use essa mesma origem na configuração do Clerk e em seus callbacks.
+Configure `APP_ORIGIN=https://efemero.rafael.run` somente no ambiente de produção. Use essa mesma origem na configuração do Clerk e em seus callbacks.
 
 Associe esse hostname ao projeto `efemero` e obtenha os registros DNS e eventuais desafios de propriedade que a Vercel retornar. Não use um destino CNAME genérico. A associação só estará concluída depois de verificar DNS, certificado HTTPS e os fluxos da aplicação nesse endereço.
 

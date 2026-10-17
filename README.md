@@ -1,10 +1,10 @@
-# Efêmero
+# Efemero
 
 Compartilhamento temporário de mensagens e arquivos, com criptografia no navegador e autenticação por senha antes da entrega.
 
 ## Estado
 
-MVP implementado localmente, com testes de protocolo, criptografia e ciclo de vida. A publicação e a integração real com Clerk/Blob/Neon dependem da configuração dos serviços. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação. O repositório remoto é `toruticas/efemero`; sua visibilidade privada precisa ser verificada antes do envio.
+MVP implementado, com testes de protocolo, criptografia e ciclo de vida e CI aprovada no GitHub. A publicação e a integração real com Clerk/Blob/Neon dependem da configuração dos serviços. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação. O repositório remoto é `toruticas/efemero`, confirmado privado. O domínio de produção escolhido é `efemero.rafael.run`; sua associação ainda está pendente.
 
 ## Requisitos acordados
 

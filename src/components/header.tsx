@@ -3,11 +3,11 @@ import { ArrowUpRight, LockKeyhole } from "lucide-react";
 export function Header() {
   return (
     <header className="header">
-      <Link className="brand" href="/" aria-label="Efêmero, página inicial">
+      <Link className="brand" href="/" aria-label="Efemero, página inicial">
         <span className="brand-symbol">
           <LockKeyhole size={18} strokeWidth={2.2} />
         </span>
-        efêmero<span className="brand-dot">.</span>
+        efemero<span className="brand-dot">.</span>
       </Link>
       <nav aria-label="Navegação principal">
         <span className="header-note">
