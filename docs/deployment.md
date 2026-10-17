@@ -19,7 +19,7 @@ Em 17/10/2026, o acesso à equipe foi liberado. O projeto `prj_VQR4e2oJNhmkv8lgC
 - Neon: projeto `old-tooth-31877519`, branch `br-morning-sound-b8fxg85q` (`production`), banco `efemero`, PostgreSQL 17 em `aws-us-east-1`. Migração `001_initial` aplicada em transação pela integração autenticada e confirmada na tabela de versões. Pool de conexões habilitado e histórico de restauração configurado em zero.
 - Blob: store `store_UDExr0Rlu7Ri4KZG` (`efemero-production`), acesso privado, região `iad1`.
 - Variáveis do serviço configuradas somente em produção, incluindo os segredos OPAQUE e a conexão ao banco. O token Blob também foi restringido a produção e marcado como sensível. Sua leitura local não foi validada; valores cifrados de listagens de metadados não são credenciais utilizáveis.
-- Clerk ainda precisa ser instalado e conectado ao projeto pelo proprietário em [Clerk no Marketplace](https://vercel.com/marketplace/clerk).
+- Clerk instalado na equipe: configuração `icfg_HRrgUWb30vz3mQ90d8bPt7gr`, plano Hobby. A integração ainda não lista projetos conectados e as duas chaves Clerk não estão nas variáveis do projeto `efemero`; a vinculação ainda está pendente.
 - A tentativa de deploy foi recusada pelo plano Hobby por causa do cron a cada minuto. Nenhum deployment foi criado. A frequência da limpeza aguarda decisão do proprietário; o bloqueio por expiração continua independente do agendador.
 
 O script de migração usa a importação padrão de `@next/env`, compatível com a execução ESM no Node.js 24. A conexão WebSocket ao Neon a partir deste ambiente de desenvolvimento não foi validada; a aplicação de produção ainda exige teste real. Não copie os segredos locais para documentação ou para o Git.
@@ -62,6 +62,10 @@ Cada ambiente tem segredos, banco e store próprios. Um preview não deve compar
 ## Clerk
 
 Crie uma aplicação Clerk e configure `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` e `CLERK_SECRET_KEY`. Configure URLs de entrada e cadastro como `/sign-in` e `/sign-up`, com destino `/app`. Cadastre as origens e callbacks permitidos no Clerk.
+
+Na integração nativa da Vercel, instalar o Clerk na equipe e conectar sua aplicação ao projeto são etapas separadas. No dashboard da equipe, abra **Integrations → Clerk** e o recurso Clerk criado. Na aba **Projects**, use **Connect Project**, selecione `efemero` e confirme **Connect**, sem prefixo personalizado nas variáveis. Se ainda não existir um recurso, crie a aplicação `efemero` no plano Hobby, com domínio de produção `efemero.rafael.run`, antes de conectá-la. A conexão sincroniza automaticamente as chaves por ambiente. Confira a configuração do domínio de produção no recurso e o DNS do Clerk antes de publicar.
+
+Referências: [instalação e vínculo Clerk](https://clerk.com/docs/guides/development/integrations/platforms/vercel-marketplace), [conectar recurso a um projeto Vercel](https://vercel.com/docs/integrations/install-an-integration/product-integration). A instalação do plugin Vercel no ChatGPT não instala nem conecta esse recurso por conta própria.
 
 O provider e os scripts do Clerk ficam na área de contas; a página compartilhada não carrega esse provider. O username é mantido pela aplicação e permanece imutável nesta versão. Definir username e consultar histórico exigem identidade verificada no backend.
 
