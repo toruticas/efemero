@@ -4,6 +4,16 @@
 
 O repositório informado pelo proprietário é [`toruticas/efemero`](https://github.com/toruticas/efemero). Mantenha a visibilidade **Private** e autorize a integração somente para esse repositório quando possível. Verifique `private: true` pela API antes de enviar o código. Não copie `.env.local`, tokens ou o diretório de autenticação do CLI.
 
+## Domínio principal
+
+O domínio escolhido é **efêmero.rafael.run**. Sua representação ASCII (IDNA/Punycode), usada no DNS e na configuração da Vercel, é `xn--efmero-jva.rafael.run`. São duas representações do mesmo endereço.
+
+Configure `APP_ORIGIN=https://xn--efmero-jva.rafael.run` somente no ambiente de produção. O código normaliza a origem com `URL`, compatível com o formato que o navegador envia no cabeçalho Origin. Use essa mesma origem na configuração do Clerk e em seus callbacks.
+
+Associe esse hostname ao projeto `efemero` e obtenha os registros DNS e eventuais desafios de propriedade que a Vercel retornar. Não use um destino CNAME genérico. A associação só estará concluída depois de verificar DNS, certificado HTTPS e os fluxos da aplicação nesse endereço.
+
+Em 17/10/2026, a Vercel confirmou a criação do projeto `prj_VQR4e2oJNhmkv8lgCe4dpQ3RSLAC` na equipe `team_iE6kuuhAKPwML0NhvJVmmrPj` (`vercel-toruticascos-projects`). A consulta seguinte ao projeto e a associação do domínio receberam HTTP 403 por falta de autorização da integração para essa equipe. Não crie outro projeto para contornar esse bloqueio. A consulta pública ao DNS confirmou os nameservers da Vercel para `rafael.run`; nenhum registro foi alterado e o subdomínio ainda não foi associado por esta sessão.
+
 ## Região
 
 `vercel.json` prepara as Functions em `iad1` (EUA). Configure Neon e Blob em regiões compatíveis e próximas antes de publicar. A região do ambiente de desenvolvimento é independente; não há garantia de residência de todos os dados apenas por definir a região das Functions. Identidade, logs, backups e caches têm configurações próprias nos provedores.
