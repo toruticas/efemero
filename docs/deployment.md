@@ -2,7 +2,7 @@
 
 ## Repositório privado
 
-Crie `toruticas/artefatos` com visibilidade **Private**, sem inicialização automática, e autorize a integração somente para esse repositório quando possível. Verifique `private: true` pela API antes de enviar o código. Não copie `.env.local`, tokens ou o diretório de autenticação do CLI.
+O repositório informado pelo proprietário é [`toruticas/efemero`](https://github.com/toruticas/efemero). Mantenha a visibilidade **Private** e autorize a integração somente para esse repositório quando possível. Verifique `private: true` pela API antes de enviar o código. Não copie `.env.local`, tokens ou o diretório de autenticação do CLI.
 
 ## Região
 

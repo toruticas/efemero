@@ -4,8 +4,8 @@ import { headers } from "next/headers";
 import "./globals.css";
 export const metadata: Metadata = {
   title: {
-    default: "Artefatos — compartilhe por um tempo",
-    template: "%s · Artefatos",
+    default: "Efêmero — compartilhe por um tempo",
+    template: "%s · Efêmero",
   },
   description:
     "Mensagens e arquivos protegidos no seu navegador, com senha e prazo para terminar.",

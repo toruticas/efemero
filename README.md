@@ -1,10 +1,10 @@
-# Artefatos
+# Efêmero
 
 Compartilhamento temporário de mensagens e arquivos, com criptografia no navegador e autenticação por senha antes da entrega.
 
 ## Estado
 
-MVP implementado localmente, com testes de protocolo, criptografia e ciclo de vida. A publicação e a integração real com Clerk/Blob/Neon dependem da configuração dos serviços. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação. O repositório remoto deve ser privado desde a criação.
+MVP implementado localmente, com testes de protocolo, criptografia e ciclo de vida. A publicação e a integração real com Clerk/Blob/Neon dependem da configuração dos serviços. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação. O repositório remoto é `toruticas/efemero`; sua visibilidade privada precisa ser verificada antes do envio.
 
 ## Requisitos acordados
 

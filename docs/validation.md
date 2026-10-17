@@ -18,7 +18,7 @@ O PostgreSQL real usa conexões independentes para testar concorrência. O adapt
 
 ## Verificações externas pendentes
 
-- Criar o repositório remoto privado e verificar `private: true`. A tentativa de criação recebeu HTTP 403 `Resource not accessible by integration`; a leitura posterior ainda respondeu 404.
+- Verificar `private: true` no repositório informado pelo proprietário, `toruticas/efemero`, e enviar os commits. A tentativa anterior de criação recebeu HTTP 403 `Resource not accessible by integration`; após a indicação do endereço correto, tanto o CLI quanto a integração continuaram respondendo 404. Isso não confirma inexistência nem visibilidade; falta acesso verificável na sessão.
 - Configurar Neon, Blob privado e segredos no ambiente de destino.
 - Configurar Clerk e verificar cadastro, entrada e sessão reais.
 - Fazer upload, callback e download contra o Blob real.
