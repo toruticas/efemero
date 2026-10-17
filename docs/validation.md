@@ -16,9 +16,12 @@ OPAQUE real para registro e autenticação, recuperação estável da export key
 
 O PostgreSQL real usa conexões independentes para testar concorrência. O adapter de storage em memória substitui apenas o provedor de objetos; os testes não substituem a criptografia por mocks. Há testes separados da fronteira HTTP com mocks para verificar que uma prova recusada nunca dispara leitura do objeto.
 
+## Acesso ao repositório
+
+O acesso a `toruticas/efemero` foi liberado em 17/10/2026. Tanto a integração quanto o CLI confirmaram a visibilidade privada e a permissão de escrita. O commit inicial remoto, contendo apenas o título no README, foi incorporado ao histórico local, mantendo o README completo da aplicação.
+
 ## Verificações externas pendentes
 
-- Verificar `private: true` no repositório informado pelo proprietário, `toruticas/efemero`, e enviar os commits. A tentativa anterior de criação recebeu HTTP 403 `Resource not accessible by integration`; após a indicação do endereço correto, tanto o CLI quanto a integração continuaram respondendo 404. Isso não confirma inexistência nem visibilidade; falta acesso verificável na sessão.
 - Configurar Neon, Blob privado e segredos no ambiente de destino.
 - Configurar Clerk e verificar cadastro, entrada e sessão reais.
 - Fazer upload, callback e download contra o Blob real.
