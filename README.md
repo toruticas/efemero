@@ -4,7 +4,7 @@ Compartilhamento temporário de mensagens e arquivos, com criptografia no navega
 
 ## Estado
 
-Publicado em [efemero.rafael.run](https://efemero.rafael.run), com compartilhamento anônimo de mensagens e arquivos verificado em navegador real contra Neon e Blob privado. O login ainda depende da configuração DNS do Clerk. A CI passou com 32 testes, incluindo PostgreSQL real. O repositório `toruticas/efemero` é privado; alterações em `main` disparam deploy automático. O plano Vercel permanece Hobby, com limpeza diária e bloqueio imediato de acesso na expiração. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação.
+Publicado em [efemero.rafael.run](https://efemero.rafael.run), com compartilhamento anônimo de mensagens e arquivos verificado em navegador real contra Neon e Blob privado. O login ainda depende da configuração DNS do Clerk. A suíte inclui testes com PostgreSQL real e concorrência. O repositório `toruticas/efemero` é privado; alterações em `main` disparam deploy automático. O plano Vercel permanece Hobby, com limpeza diária e bloqueio imediato de acesso na expiração. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação.
 
 ## Requisitos acordados
 
@@ -14,7 +14,10 @@ Publicado em [efemero.rafael.run](https://efemero.rafael.run), com compartilhame
 - OPAQUE por artefato autentica o destinatário antes de qualquer entrega do conteúdo cifrado.
 - A chave aleatória do conteúdo é protegida a partir da `export_key` do cliente; a `session_key` compartilhada com o servidor não cifra o conteúdo.
 - Expiração por tempo e limite de liberações autorizadas, aplicados atomicamente no backend.
-- Clerk autentica os criadores; usuários autenticados têm username e histórico de metadados.
+- Clerk autentica os criadores; usuários autenticados têm username imutável, IDs personalizados e histórico paginado de metadados.
+- Kill-switch opcional de 1 a 100 falhas acumuladas, definido na criação de artefatos da conta; não permite alterações posteriores.
+- Aberturas de página agregadas e entregas autorizadas; sem identificação de destinatários nem alegação de leitura/descriptografia comprovada.
+- Arquivos anônimos de até 2 MiB; arquivos criados na área autenticada de até 5 MiB.
 - Artefatos anônimos possuem credencial de revogação independente do acesso compartilhado.
 
 ## Tecnologias

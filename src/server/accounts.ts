@@ -43,7 +43,7 @@ export async function createAccount(username: string) {
       throw new AppError(
         409,
         "USERNAME_FIXED",
-        "O username da conta já foi definido e não pode ser alterado nesta versão.",
+        "O username da conta já foi definido e não pode ser alterado.",
       );
     return result.rows[0];
   } catch (error) {

@@ -1,7 +1,7 @@
 import nextEnv from "@next/env";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import WebSocket from "ws";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 nextEnv.loadEnvConfig(process.cwd());
 neonConfig.webSocketConstructor = WebSocket;
 async function main() {
@@ -15,19 +15,21 @@ async function main() {
     await client.query(
       "CREATE TABLE IF NOT EXISTS schema_migrations(version text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now())",
     );
-    const done = await client.query(
-      "SELECT version FROM schema_migrations WHERE version='001_initial'",
-    );
-    if (!done.rowCount) {
-      await client.query(
-        await readFile(
-          new URL("../migrations/001_initial.sql", import.meta.url),
-          "utf8",
-        ),
+    const directory = new URL("../migrations/", import.meta.url);
+    const files = (await readdir(directory))
+      .filter((name) => /^\d+_.*\.sql$/.test(name))
+      .sort();
+    for (const file of files) {
+      const version = file.slice(0, -4);
+      const done = await client.query(
+        "SELECT version FROM schema_migrations WHERE version=$1",
+        [version],
       );
-      await client.query(
-        "INSERT INTO schema_migrations(version) VALUES('001_initial')",
-      );
+      if (done.rowCount) continue;
+      await client.query(await readFile(new URL(file, directory), "utf8"));
+      await client.query("INSERT INTO schema_migrations(version) VALUES($1)", [
+        version,
+      ]);
     }
     await client.query("COMMIT");
     console.info("Migração concluída.");

@@ -1,5 +1,5 @@
 import {
-  MAX_CIPHER_BYTES,
+  MAX_READ_CIPHER_BYTES,
   MAX_FILE_BYTES,
   MAX_MESSAGE_BYTES,
   type ArtifactPayload,
@@ -105,7 +105,7 @@ export async function decryptArtifact(
   const input = new Uint8Array(ciphertext);
   if (
     input.length < 29 ||
-    input.length > MAX_CIPHER_BYTES ||
+    input.length > MAX_READ_CIPHER_BYTES ||
     input[0] !== 1 ||
     wrapped.version !== 1
   )

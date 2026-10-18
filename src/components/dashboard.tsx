@@ -9,11 +9,13 @@ const statuses: Record<string, string> = {
   ready: "Disponível",
   exhausted: "Limite atingido",
   expired: "Expirado",
-  revoked: "Revogado",
+  revoked: "Removido",
+  destroyed: "Kill-switch acionado",
 };
 type Data = {
   account: { id: string; username: string } | null;
   artifacts: ArtifactSummary[];
+  nextCursor: string | null;
 };
 export function Dashboard({
   sharingConfigured,
@@ -24,13 +26,42 @@ export function Dashboard({
     [error, setError] = useState(""),
     [username, setUsername] = useState(""),
     [creating, setCreating] = useState(false),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [loadingMore, setLoadingMore] = useState(false),
+    [removing, setRemoving] = useState<string | null>(null);
   async function refresh() {
     try {
       setError("");
       setData(await api<Data>("/api/account"));
     } catch (e) {
       setError((e as Error).message);
+    }
+  }
+  async function loadMore() {
+    if (!data?.nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await api<Data>(
+        `/api/account?cursor=${encodeURIComponent(data.nextCursor)}`,
+      );
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              nextCursor: page.nextCursor,
+              artifacts: [
+                ...current.artifacts,
+                ...page.artifacts.filter(
+                  (a) => !current.artifacts.some((b) => b.id === a.id),
+                ),
+              ],
+            }
+          : page,
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoadingMore(false);
     }
   }
   useEffect(() => {
@@ -71,8 +102,8 @@ export function Dashboard({
         <p className="eyebrow">SEU PRIMEIRO PASSO</p>
         <h2>Como você quer aparecer?</h2>
         <p className="muted">
-          Seu username fará parte dos links compartilhados. Ele permanece fixo
-          nesta versão.
+          Seu username fará parte dos links compartilhados. Depois de definido,
+          não poderá ser alterado.
         </p>
         <label htmlFor="username">Username</label>
         <div className="slug-input">
@@ -124,12 +155,20 @@ export function Dashboard({
         </p>
       )}
       {creating && (
-        <CreateForm configured={sharingConfigured} account={data.account} />
+        <CreateForm
+          configured={sharingConfigured}
+          account={data.account}
+          onCreated={() => {
+            void refresh();
+          }}
+        />
       )}
       <div className="history-card">
         <div className="card-heading">
           <h2>Histórico de criação</h2>
-          <span className="muted small">Últimos 100 artefatos</span>
+          <span className="muted small">
+            {data.artifacts.length} artefatos listados
+          </span>
         </div>
         {data.artifacts.length === 0 ? (
           <div className="history-empty">
@@ -145,7 +184,9 @@ export function Dashboard({
                 <tr>
                   <th>Endereço</th>
                   <th>Estado</th>
-                  <th>Liberações</th>
+                  <th>Aberturas da página</th>
+                  <th>Entregas autorizadas</th>
+                  <th>Falhas / kill-switch</th>
                   <th>Expiração</th>
                   <th>
                     <span className="sr-only">Ações</span>
@@ -173,9 +214,15 @@ export function Dashboard({
                         {statuses[a.state]}
                       </span>
                     </td>
+                    <td>{a.accessCount}</td>
                     <td>
                       {a.releaseCount}
                       {a.maxReleases === null ? " / ∞" : ` / ${a.maxReleases}`}
+                    </td>
+                    <td>
+                      {a.maxFailures === null
+                        ? "Desativado"
+                        : `${a.failedCount} / ${a.maxFailures}`}
                     </td>
                     <td>
                       {new Date(a.expiresAt).toLocaleString("pt-BR", {
@@ -187,13 +234,24 @@ export function Dashboard({
                       {["ready", "pending"].includes(a.state) && (
                         <button
                           className="icon-button danger"
-                          aria-label={`Revogar ${a.slug}`}
+                          aria-label={`Bloquear e remover ${a.slug}`}
+                          title="Bloquear e remover definitivamente"
+                          disabled={removing !== null}
                           onClick={async () => {
+                            if (
+                              !window.confirm(
+                                `Bloquear e remover /${a.namespace}/${a.slug}? Esta ação não pode ser desfeita.`,
+                              )
+                            )
+                              return;
+                            setRemoving(a.id);
                             try {
                               await api("/api/artifacts/revoke", { id: a.id });
                               await refresh();
                             } catch (e) {
                               setError((e as Error).message);
+                            } finally {
+                              setRemoving(null);
                             }
                           }}
                         >
@@ -208,9 +266,22 @@ export function Dashboard({
           </div>
         )}
       </div>
+      {data.nextCursor && (
+        <button
+          className="button secondary"
+          disabled={loadingMore}
+          onClick={loadMore}
+        >
+          {loadingMore ? "Carregando…" : "Carregar mais artefatos"}
+        </button>
+      )}
       <p className="small muted">
-        O histórico não guarda o conteúdo nem sua senha. Abrir um endereço pede
-        a senha; somente uma entrega autorizada consome acesso.
+        As aberturas da página são uma estimativa e podem incluir recargas e
+        robôs. Entregas autorizadas consomem o limite, mesmo se a conexão for
+        interrompida; não confirmam descriptografia ou leitura. Não guardamos
+        conteúdo, senha nem histórico dos destinatários. Os metadados deixam de
+        ser listados 30 dias após a exclusão física. O bloqueio é definitivo e
+        agenda a remoção do conteúdo; nada pode ser editado.
       </p>
     </>
   );

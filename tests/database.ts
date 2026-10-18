@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import type { Database, QueryClient, Row } from "@/server/db";
 
 export async function testDatabase(): Promise<{
@@ -9,10 +9,15 @@ export async function testDatabase(): Promise<{
   reset(): Promise<void>;
   close(): Promise<void>;
 }> {
-  const migration = await readFile(
-    new URL("../migrations/001_initial.sql", import.meta.url),
-    "utf8",
-  );
+  const directory = new URL("../migrations/", import.meta.url);
+  const files = (await readdir(directory))
+    .filter((name) => /^\d+_.*\.sql$/.test(name))
+    .sort();
+  const migration = (
+    await Promise.all(
+      files.map((file) => readFile(new URL(file, directory), "utf8")),
+    )
+  ).join("\n");
   if (process.env.TEST_DATABASE_URL) {
     const schema = `test_${randomUUID().replaceAll("-", "")}`;
     const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });

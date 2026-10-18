@@ -4,12 +4,13 @@ import { createAccount, currentAccount } from "@/server/accounts";
 import { artifacts } from "@/server/services";
 import { rateLimit, requestIdentity } from "@/server/rate-limit";
 export const runtime = "nodejs";
-export const GET = route(async () => {
+export const GET = route(async (request) => {
   const account = await currentAccount();
-  return json({
-    account,
-    artifacts: account ? await artifacts().history(account.id) : [],
-  });
+  const cursor = new URL(request.url).searchParams.get("cursor") || undefined;
+  const history = account
+    ? await artifacts().history(account.id, cursor)
+    : { artifacts: [], nextCursor: null };
+  return json({ account, ...history });
 });
 export const POST = route(async (request) => {
   sameOrigin(request);

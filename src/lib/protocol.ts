@@ -1,7 +1,11 @@
 export const PROTOCOL_VERSION = 1;
 export const KEY_STRETCHING = "memory-constrained" as const;
-export const MAX_FILE_BYTES = 25 * 1024 * 1024;
-export const MAX_CIPHER_BYTES = MAX_FILE_BYTES + 4096;
+export const ANONYMOUS_FILE_BYTES = 2 * 1024 * 1024;
+export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const CIPHER_OVERHEAD_BYTES = 4096;
+export const MAX_CIPHER_BYTES = MAX_FILE_BYTES + CIPHER_OVERHEAD_BYTES;
+// Existing artifacts retain their original policy until expiration (at most 7 days).
+export const MAX_READ_CIPHER_BYTES = 25 * 1024 * 1024 + CIPHER_OVERHEAD_BYTES;
 export const MAX_MESSAGE_BYTES = 256 * 1024;
 export const MAX_TTL_MINUTES = 7 * 24 * 60;
 export const RESERVED_NAMES = new Set([
@@ -26,7 +30,7 @@ export type ArtifactPayload = {
   data: ArrayBuffer;
 };
 export type ArtifactState =
-  "pending" | "ready" | "revoked" | "expired" | "exhausted";
+  "pending" | "ready" | "revoked" | "expired" | "exhausted" | "destroyed";
 export type ArtifactSummary = {
   id: string;
   namespace: string;
@@ -34,9 +38,17 @@ export type ArtifactSummary = {
   state: ArtifactState;
   createdAt: string;
   expiresAt: string;
+  accessCount: number;
+  failedCount: number;
+  maxFailures: number | null;
   releaseCount: number;
   maxReleases: number | null;
   declaredSize: number;
+};
+
+export type HistoryPage = {
+  artifacts: ArtifactSummary[];
+  nextCursor: string | null;
 };
 
 export function publicPath(namespace: string, slug: string) {

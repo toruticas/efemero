@@ -58,6 +58,24 @@ O painel retém apenas o histórico mínimo com política de retenção document
 
 ## Operação inicial
 
-Limite inicial pretendido de 25 MB por artefato. Upload direto ao Blob privado e download por streaming. Vercel Cron para limpeza frequente depende de plano compatível; o bloqueio temporal funciona independentemente do cron. A configuração de serviços reais e segredos ocorre por canais seguros, nunca por commits.
+Arquivos novos: até 2 MiB em links anônimos e 5 MiB em artefatos da conta, mais até 4 KiB de envelope cifrado no orçamento do backend. O navegador verifica o tamanho original; o servidor impõe o limite do ciphertext sem conhecer o conteúdo. Artefatos antigos preservam sua política até expirar. Upload direto ao Blob privado e download por streaming. Vercel Cron executa a limpeza diária no plano Hobby; o bloqueio temporal funciona independentemente do cron. A configuração de serviços reais e segredos ocorre por canais seguros, nunca por commits.
 
 Publicação e exposição pública exigem comportamento completo e serviços configurados. Não substituir o produto por uma demonstração que entregue ciphertext antes da autenticação ou que guarde senhas/chaves em claro.
+
+## Área autenticada e estatísticas
+
+O username é escolhido uma vez, com proteção também por trigger no Postgres. O ID é aleatório ou um slug ASCII de até 48 caracteres, único no namespace do usuário. Não existem rotas de edição de conteúdo, endereço ou regras. A reserva só pode ser publicada uma vez. Revogar pelo painel usa a identidade Clerk verificada e bloqueia novas entregas definitivamente, removendo registro OPAQUE e chave envelopada e agendando a exclusão física. Não há desbloqueio ou reutilização de endereço.
+
+O histórico usa paginação por `(created_at, id)` e filtra sempre pelo proprietário autenticado, sem limite global de 100 itens. Mantém apenas metadados e contadores por até 30 dias após o purge. Depois disso, o vínculo com a conta e os contadores são removidos pela limpeza. Os caminhos públicos continuam reservados.
+
+Aberturas da página são contagens agregadas de um POST executado quando o navegador monta o visualizador; prefetch do HTML não incrementa o contador. Recargas, robôs que executem JavaScript e requisições deliberadas podem inflar a estimativa. Não são visitantes únicos: não há cookies de analytics, impressão digital ou identificação de destinatários. Rate limiting usa os buckets HMAC temporários já existentes. A contagem começou nesta evolução; não há reconstrução de tráfego anterior.
+
+O servidor conta entregas autorizadas antes de transmitir bytes. Não sabe se a descriptografia terminou ou se houve leitura. Um callback do navegador não comprovaria essas ações, por isso não foi adicionado um contador chamado “descriptografias”.
+
+## Kill-switch e OPAQUE
+
+Política opcional apenas para artefatos da conta, de 1 a 100 falhas acumuladas. Acertos não zeram o contador. Uma prova final inválida consome o desafio uma única vez e conta uma falha. O cliente OPAQUE detecta a senha errada localmente: o worker produz uma prova aleatória inválida para encerrar essa tentativa, sem mandar senha, hash estático ou verificador reutilizável. A API nunca entrega ciphertext nessa situação.
+
+Um cliente modificado pode omitir a mensagem final, por isso desafios sem conclusão contam após 120 segundos. Isso inclui abandono da página e falhas de rede, mesmo com senha correta. O backend resolve esses desafios sob bloqueio do artefato antes de aceitar novos inícios ou provas finais; a rotina diária também os processa. A avaliação não depende do cron para impedir novas entregas. O número de desafios pendentes é limitado ao orçamento restante, evitando ultrapassagem por concorrência. Quando todos os slots estão em uso, um novo início recebe 429 sem destruir antecipadamente o artefato.
+
+Ao atingir o limite, o estado passa a `destroyed`: provas pendentes deixam de valer, registro e chave envelopada são eliminados na mesma transação e a remoção do Blob privado é agendada respeitando entregas já autorizadas e tokens de upload emitidos. Qualquer pessoa que conheça o link pode provocar o kill-switch deliberadamente. Esse risco é inseparável da política e aparece na criação; o recurso vem desativado.

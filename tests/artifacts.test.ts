@@ -5,7 +5,12 @@ import { ArtifactService } from "@/server/artifacts";
 import { rateLimit } from "@/server/rate-limit";
 import { dailyCleanup } from "@/server/daily-cleanup";
 import { encryptArtifact, decryptArtifact } from "@/lib/crypto";
-import { KEY_STRETCHING } from "@/lib/protocol";
+import {
+  KEY_STRETCHING,
+  ANONYMOUS_FILE_BYTES,
+  MAX_FILE_BYTES,
+  CIPHER_OVERHEAD_BYTES,
+} from "@/lib/protocol";
 import type { Storage } from "@/server/storage";
 import { testDatabase } from "./database";
 
@@ -78,6 +83,7 @@ describe("artifact protocol and lifecycle", () => {
     ttlMinutes = 60,
     account?: { id: string; username: string },
     slug?: string,
+    maxFailures?: number,
   ) {
     const first = opaque.client.startRegistration({ password });
     const reservation = await service.reserve(
@@ -87,6 +93,7 @@ describe("artifact protocol and lifecycle", () => {
         size: 4096,
         ttlMinutes,
         maxReleases,
+        ...(maxFailures ? { maxFailures } : {}),
         registrationRequest: first.registrationRequest,
       },
       account || null,
@@ -373,8 +380,10 @@ describe("artifact protocol and lifecycle", () => {
     await expect(
       service.revoke(a.id, undefined, "other-owner"),
     ).rejects.toMatchObject({ status: 403 });
-    expect(await service.history("other-owner")).toEqual([]);
-    expect((await service.history(owner.id))[0].slug).toBe("contrato");
+    expect((await service.history("other-owner")).artifacts).toEqual([]);
+    expect((await service.history(owner.id)).artifacts[0].slug).toBe(
+      "contrato",
+    );
     await service.revoke(a.id, undefined, owner.id);
     now = new Date(now.getTime() + 17 * 60_000);
     await service.cleanup();
@@ -498,5 +507,291 @@ describe("artifact protocol and lifecycle", () => {
     await expect(
       rateLimit("start", "same-artifact", 3, 60, database.db, now),
     ).resolves.toBeUndefined();
+  });
+  async function account() {
+    const owner = { id: "owner", username: "alice" };
+    await database.db.query(
+      "INSERT INTO accounts(id,clerk_id,username) VALUES($1,$2,$3)",
+      [owner.id, "clerk-alice", owner.username],
+    );
+    return owner;
+  }
+  const invalidProof = () => randomBytes(64).toString("base64url");
+  async function artifact(id: string) {
+    return (
+      await database.db.query("SELECT * FROM artifacts WHERE id=$1", [id])
+    ).rows[0];
+  }
+  it("enforces 2 MiB anonymous and 5 MiB account reservation/upload budgets", async () => {
+    const owner = await account();
+    const first = opaque.client.startRegistration({ password });
+    for (const mode of ["anonymous", "account"] as const) {
+      const size =
+        (mode === "account" ? MAX_FILE_BYTES : ANONYMOUS_FILE_BYTES) +
+        CIPHER_OVERHEAD_BYTES;
+      const input = {
+        mode,
+        size,
+        ttlMinutes: 60,
+        maxReleases: null,
+        registrationRequest: first.registrationRequest,
+      };
+      const a = await service.reserve(input, mode === "account" ? owner : null);
+      expect(
+        (await service.issueUpload(a.id, a.managementToken, a.pathname))
+          .maximumSizeInBytes,
+      ).toBe(size);
+      await expect(
+        service.reserve({ ...input, size: size + 1 }, owner),
+      ).rejects.toMatchObject({ code: "SIZE" });
+    }
+    await expect(
+      service.reserve(
+        {
+          mode: "account",
+          size: 64,
+          ttlMinutes: 60,
+          maxReleases: null,
+          registrationRequest: first.registrationRequest,
+        },
+        null,
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      service.reserve(
+        {
+          mode: "anonymous",
+          maxFailures: 1,
+          size: 64,
+          ttlMinutes: 60,
+          maxReleases: null,
+          registrationRequest: first.registrationRequest,
+        },
+        owner,
+      ),
+    ).rejects.toMatchObject({ code: "POLICY" });
+  });
+  it("accumulates failed proofs once, preserves them after success and destroys at the threshold", async () => {
+    const owner = await account(),
+      a = await create(10, 60, owner, "segredo", 2);
+    const wrong = await login(a, "senha-errada-de-teste");
+    expect(wrong.proof).toBeUndefined();
+    const proof = invalidProof();
+    await expect(
+      service.authorizeDelivery(wrong.response.handshakeId, proof),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      service.authorizeDelivery(wrong.response.handshakeId, proof),
+    ).rejects.toMatchObject({ status: 404 });
+    expect((await artifact(a.id)).failed_count).toBe(1);
+    const valid = await login(a);
+    await service.authorizeDelivery(
+      valid.response.handshakeId,
+      valid.proof!.finishLoginRequest,
+    );
+    expect((await artifact(a.id)).failed_count).toBe(1);
+    const last = await login(a);
+    await expect(
+      service.authorizeDelivery(last.response.handshakeId, invalidProof()),
+    ).rejects.toMatchObject({ status: 404 });
+    const row = await artifact(a.id);
+    expect(row.state).toBe("destroyed");
+    expect(row.failed_count).toBe(2);
+    expect(row.registration_record).toBeNull();
+    expect(row.wrapped_key).toBeNull();
+    await expect(login(a)).rejects.toMatchObject({ status: 404 });
+    expect(objects.has(a.pathname)).toBe(true);
+    now = new Date(now.getTime() + 17 * 60_000);
+    expect((await service.cleanup()).deleted).toBe(1);
+    expect(objects.has(a.pathname)).toBe(false);
+  });
+  it("reserves the remaining attempt budget atomically without killing before a proof or timeout", async () => {
+    const owner = await account(),
+      a = await create(10, 60, owner, undefined, 1);
+    const first = opaque.client.startLogin({ password });
+    const starts = await Promise.allSettled(
+      Array.from({ length: 8 }, () =>
+        service.startLogin(a.namespace, a.slug, first.startLoginRequest),
+      ),
+    );
+    expect(starts.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(
+      starts.filter((r) => r.status === "rejected" && r.reason.status === 429),
+    ).toHaveLength(7);
+    expect((await artifact(a.id)).state).toBe("ready");
+    const accepted = starts.find((r) => r.status === "fulfilled")!;
+    if (accepted.status !== "fulfilled") throw new Error("No accepted attempt");
+    const proof = opaque.client.finishLogin({
+      password,
+      clientLoginState: first.clientLoginState,
+      loginResponse: accepted.value.loginResponse,
+      identifiers: { client: a.id, server: serverIdentity },
+      keyStretching: KEY_STRETCHING,
+    })!;
+    await service.authorizeDelivery(
+      accepted.value.handshakeId,
+      proof.finishLoginRequest,
+    );
+    expect((await artifact(a.id)).failed_count).toBe(0);
+    // A success returns its slot, but an abandoned next attempt counts at expiry.
+    const abandoned = await login(a);
+    now = new Date(now.getTime() + 120_000);
+    await expect(
+      service.authorizeDelivery(
+        abandoned.response.handshakeId,
+        abandoned.proof!.finishLoginRequest,
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    expect((await artifact(a.id)).state).toBe("destroyed");
+    expect((await artifact(a.id)).failed_count).toBe(1);
+  });
+  it("counts abandoned challenges before issuing more challenges, even without cleanup", async () => {
+    const owner = await account(),
+      a = await create(10, 60, owner, undefined, 1);
+    await login(a, "outra-senha-incorreta");
+    now = new Date(now.getTime() + 120_000);
+    await expect(login(a)).rejects.toMatchObject({ status: 404 });
+    expect((await artifact(a.id)).failed_count).toBe(1);
+    expect((await artifact(a.id)).state).toBe("destroyed");
+  });
+  it("serializes simultaneous failed proofs and a valid delivery against the kill-switch", async () => {
+    const owner = await account(),
+      a = await create(10, 60, owner, undefined, 3);
+    const attempts = [await login(a), await login(a), await login(a)];
+    const result = await Promise.allSettled(
+      attempts.map((l) =>
+        service.authorizeDelivery(l.response.handshakeId, invalidProof()),
+      ),
+    );
+    expect(result.every((r) => r.status === "rejected")).toBe(true);
+    expect((await artifact(a.id)).failed_count).toBe(3);
+    expect((await artifact(a.id)).state).toBe("destroyed");
+    expect(await count(a.id)).toBe(0);
+  });
+  it("settles abandoned attempts in cleanup and preserves a racing successful proof", async () => {
+    const owner = await account(),
+      a = await create(10, 60, owner, undefined, 2);
+    await login(a);
+    now = new Date(now.getTime() + 60_000);
+    const good = await login(a);
+    now = new Date(now.getTime() + 60_000);
+    const results = await Promise.allSettled([
+      service.cleanup(),
+      service.authorizeDelivery(
+        good.response.handshakeId,
+        good.proof!.finishLoginRequest,
+      ),
+    ]);
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+    expect((await artifact(a.id)).failed_count).toBe(1);
+    expect((await artifact(a.id)).state).toBe("ready");
+    expect(await count(a.id)).toBe(1);
+  });
+  it("counts aggregate page openings separately from authorized deliveries, without recipient data", async () => {
+    const owner = await account(),
+      a = await create(5, 60, owner),
+      anon = await create(5);
+    await Promise.all(
+      Array.from({ length: 12 }, () => service.visit(a.namespace, a.slug)),
+    );
+    await service.visit(anon.namespace, anon.slug);
+    const absent = await service.visit("alice", "does-not-exist");
+    expect(absent).toEqual({ recorded: true });
+    const l = await login(a);
+    await service.authorizeDelivery(
+      l.response.handshakeId,
+      l.proof!.finishLoginRequest,
+    );
+    const summary = (await service.history(owner.id)).artifacts[0];
+    expect(summary.accessCount).toBe(12);
+    expect(summary.releaseCount).toBe(1);
+    expect((await artifact(anon.id)).access_count).toBe(0);
+    expect(Object.keys(summary).sort()).toEqual(
+      [
+        "id",
+        "namespace",
+        "slug",
+        "state",
+        "createdAt",
+        "expiresAt",
+        "accessCount",
+        "releaseCount",
+        "maxReleases",
+        "declaredSize",
+        "failedCount",
+        "maxFailures",
+      ].sort(),
+    );
+    await service.revoke(a.id, undefined, owner.id);
+    await service.visit(a.namespace, a.slug);
+    expect((await artifact(a.id)).access_count).toBe(12);
+    now = new Date(now.getTime() + 17 * 60_000);
+    await service.cleanup();
+    now = new Date(now.getTime() + 31 * 24 * 60 * 60_000);
+    await service.cleanup();
+    expect((await service.history(owner.id)).artifacts).toEqual([]);
+    expect((await artifact(a.id)).access_count).toBe(0);
+  });
+  it("pages through the entire owner history without duplicates or crossing accounts", async () => {
+    const owner = await account();
+    await database.db.query(
+      `INSERT INTO artifacts(id,owner_id,namespace,slug,created_at,expires_at,pending_expires_at,declared_size,blob_path,setup_version,management_hash,purged_at)
+      SELECT gen_random_uuid(),$1,'alice','old-'||n,$2,$2,$2,1,'old-'||n,'1','',$2 FROM generate_series(1,123) n`,
+      [owner.id, now],
+    );
+    const a = await service.history(owner.id);
+    expect(a.artifacts).toHaveLength(50);
+    expect((await service.history("other", a.nextCursor!)).artifacts).toEqual(
+      [],
+    );
+    const b = await service.history(owner.id, a.nextCursor!);
+    const c = await service.history(owner.id, b.nextCursor!);
+    expect(b.artifacts).toHaveLength(50);
+    expect(c.artifacts).toHaveLength(23);
+    expect(c.nextCursor).toBeNull();
+    expect(
+      new Set([...a.artifacts, ...b.artifacts, ...c.artifacts].map((r) => r.id))
+        .size,
+    ).toBe(123);
+    await expect(service.history(owner.id, "invalid")).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+  it("rejects changes to an established username at the database boundary", async () => {
+    const owner = await account();
+    await expect(
+      database.db.query("UPDATE accounts SET username='changed' WHERE id=$1", [
+        owner.id,
+      ]),
+    ).rejects.toMatchObject({ code: "23514" });
+    expect(
+      (
+        await database.db.query("SELECT username FROM accounts WHERE id=$1", [
+          owner.id,
+        ])
+      ).rows[0].username,
+    ).toBe("alice");
+  });
+  it("drains more than one batch of abandoned kill-switch attempts in the daily job", async () => {
+    const owner = await account();
+    await database.db.query(
+      `INSERT INTO artifacts(id,owner_id,namespace,slug,state,created_at,expires_at,pending_expires_at,declared_size,blob_path,setup_version,management_hash,max_failures)
+      SELECT gen_random_uuid(),$1,'alice','batch-'||n,'ready',$2,$2::timestamptz+INTERVAL '1 hour',$2::timestamptz+INTERVAL '15 minutes',1,'batch-'||n,'1','',1 FROM generate_series(1,105) n`,
+      [owner.id, now],
+    );
+    await database.db.query(
+      `INSERT INTO handshakes(id,artifact_id,sealed_state,expires_at) SELECT gen_random_uuid(),id,'expired-state',$1::timestamptz+INTERVAL '2 minutes' FROM artifacts`,
+      [now],
+    );
+    now = new Date(now.getTime() + 120_000);
+    const result = await dailyCleanup(service);
+    expect(result.batches).toBe(2);
+    const remaining = await database.db.query(
+      "SELECT id FROM artifacts WHERE state <> 'destroyed'",
+    );
+    expect(remaining.rows).toHaveLength(0);
+    expect(
+      (await database.db.query("SELECT id FROM handshakes")).rows,
+    ).toHaveLength(0);
   });
 });

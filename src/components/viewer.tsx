@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight,
   Download,
@@ -13,7 +13,7 @@ import { CryptoSession } from "@/lib/crypto-session";
 import { api } from "@/lib/api";
 import { fromBase64 } from "@/lib/crypto";
 import {
-  MAX_CIPHER_BYTES,
+  MAX_READ_CIPHER_BYTES,
   validatePassword,
   type ArtifactPayload,
   type WrappedKey,
@@ -33,6 +33,16 @@ export function Viewer({
     [error, setError] = useState(""),
     [payload, setPayload] = useState<ArtifactPayload | null>(null),
     [stage, setStage] = useState("");
+  const visited = useRef("");
+  useEffect(() => {
+    const path = `${namespace}/${slug}`;
+    if (!configured || visited.current === path) return;
+    visited.current = path;
+    // Aggregate only: no visitor identifier, cookies or analytics SDK.
+    void api("/api/artifacts/access/visit", { namespace, slug }).catch(
+      () => {},
+    );
+  }, [configured, namespace, slug]);
   async function open(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -53,10 +63,19 @@ export function Viewer({
         loginResponse: string;
         serverIdentity: string;
       }>("/api/artifacts/access/start", { namespace, slug, ...first });
-      const proof = await session.run<{ finishLoginRequest: string }>(
-        "login-finish",
-        start,
-      );
+      const proof = await session.run<{
+        finishLoginRequest: string;
+        rejected?: boolean;
+      }>("login-finish", start);
+      if (proof.rejected) {
+        // A wrong password is detected locally. Finalize with an invalid random
+        // proof so the server burns this attempt without receiving the password.
+        await api("/api/artifacts/access/finish", {
+          handshakeId: start.handshakeId,
+          finishLoginRequest: proof.finishLoginRequest,
+        }).catch(() => {});
+        throw new Error("Senha incorreta ou artefato indisponível.");
+      }
       setStage("Recebendo o conteúdo criptografado…");
       const response = await fetch("/api/artifacts/access/finish", {
         method: "POST",
@@ -79,7 +98,7 @@ export function Viewer({
         const { done, value } = await reader.read();
         if (done) break;
         length += value.length;
-        if (length > MAX_CIPHER_BYTES) {
+        if (length > MAX_READ_CIPHER_BYTES) {
           await reader.cancel();
           throw new Error("Artefato acima do limite permitido.");
         }

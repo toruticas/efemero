@@ -67,13 +67,14 @@ Na integração nativa da Vercel, instalar o Clerk na equipe e conectar sua apli
 
 Referências: [instalação e vínculo Clerk](https://clerk.com/docs/guides/development/integrations/platforms/vercel-marketplace), [conectar recurso a um projeto Vercel](https://vercel.com/docs/integrations/install-an-integration/product-integration). A instalação do plugin Vercel no ChatGPT não instala nem conecta esse recurso por conta própria.
 
-O provider e os scripts do Clerk ficam na área de contas; a página compartilhada não carrega esse provider. O username é mantido pela aplicação e permanece imutável nesta versão. Definir username e consultar histórico exigem identidade verificada no backend.
+O provider e os scripts do Clerk ficam na área de contas; a página compartilhada não carrega esse provider. O username é mantido pela aplicação e é imutável, com proteção no banco. Definir username e consultar histórico exigem identidade verificada no backend.
 
 ## Limpeza e limites
 
 `/api/cron/cleanup` exige `Authorization: Bearer <CRON_SECRET>`. O cron `0 3 * * *` agenda uma execução diária, compatível com o plano Hobby escolhido pelo proprietário. Nesse plano o horário pode variar dentro da janela da plataforma. A rotina remove objetos cujo prazo e janela de segurança já terminaram e repete exclusões que falharam; ela não faz deploy. O bloqueio do artefato verifica o prazo em cada requisição e independe da execução do cron. Deploys acompanham alterações de código na branch principal (`main`), via integração Git.
 
-- Arquivo: até 25 MiB; mensagem: até 256 KiB.
+- Arquivo novo: até 2 MiB em modo anônimo e 5 MiB na área autenticada; mensagem: até 256 KiB. O orçamento cifrado inclui até 4 KiB extras de envelope.
+- Kill-switch: opcional, de 1 a 100 falhas acumuladas; desafios abandonados contam após 2 minutos.
 - Prazo: de 1 minuto a 7 dias, contado da reserva inicial.
 - Liberações: opcional, de 1 a 100; o prazo sempre existe.
 - Capacidade inicial total: 1 GiB reservado, incluindo uploads pendentes ainda não limpos.
@@ -84,6 +85,10 @@ O provider e os scripts do Clerk ficam na área de contas; a página compartilha
 Os limites são conservadores e ficam em código nesta versão. Na Vercel, a identidade de rede usa o cabeçalho controlado pela plataforma. Fora da Vercel, todos compartilham um bucket conservador, sem confiar em cabeçalhos de IP enviados pelo cliente; adaptar a outro proxy exige revisão explícita.
 
 A entrega é uma resposta de streaming de até 60 segundos, sem retomada. Uma interrupção após a autorização consome uma liberação. A remoção do objeto espera a janela de entrega e a expiração da permissão de upload, com margem; um inventário posterior remove gravações tardias. O histórico da conta deixa de ser listado 30 dias após o purge; o endereço continua reservado.
+
+## Migrações da área autenticada
+
+Aplicar `002_account_controls` antes de publicar o código desta evolução. A migração é aditiva para os dados: inclui contadores e política de falhas, amplia a lista de estados, cria índices de paginação/desafios e protege o username com um trigger. Registros existentes recebem contadores zero e kill-switch desativado. Não muda endereços, senhas, conteúdo, TTL ou regras de artefatos anteriores. O migrador percorre arquivos SQL em ordem e registra cada versão na mesma transação, com advisory lock.
 
 ## Validação antes de exposição pública
 

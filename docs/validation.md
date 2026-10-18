@@ -40,3 +40,11 @@ A execução no navegador revelou uma incompatibilidade entre o CSP inicial e o 
 - Exercitar Safari/iOS real e transferências no tamanho máximo em redes móveis antes de ampliar o uso.
 
 Os testes usaram apenas artefatos sintéticos. Não comprovam prazos internos de retenção, backups ou caches dos provedores. O plano Vercel permanece Hobby; nenhuma mudança para plano pago foi realizada.
+
+## Evolução da área autenticada — 18/10/2026
+
+- Migração `002_account_controls` aplicada no Neon de produção em transação, com advisory lock, antes da publicação do código. Sem alteração de regras ou material criptográfico de artefatos existentes.
+- 46 testes passaram em PostgreSQL 17 real, com conexões concorrentes. Casos novos cobrem limites de 2/5 MiB, escopo da conta no HTTP e no serviço, username imutável no banco, paginação além de 100 registros, contadores agregados, replay de prova inválida, orçamento de desafios pendentes, falhas acumuladas, abandono sem cron, concorrência entre limpeza e prova válida e múltiplos lotes de kill-switch.
+- Typecheck, formatação e build de produção passaram. A validação visual dos componentes reais em Chromium usou um servidor local e respostas HTTP simuladas: onboarding, paginação, remoção, ID personalizado, kill-switch somente na conta e rejeição de arquivos acima de 2/5 MiB antes de qualquer reserva. Corrigida a posição do contêiner da tabela para evitar overflow da página em viewport de 390 px.
+- O painel mostra entregas autorizadas, sem afirmar que sejam descriptografias ou leituras concluídas. As aberturas de página são estimativas agregadas iniciadas nesta evolução. Não foram adicionados cookies de analytics, rastreamento de destinatários ou conteúdo em claro no histórico.
+- O navegador real de produção ainda não carrega o Clerk: erro de CORS no script servido por `clerk.rafael.run`, com tela sem campos de login. A configuração DNS exata do Clerk continua necessária para verificar cadastro/sessão e o painel autenticado de ponta a ponta em produção; os testes de painel com respostas simuladas não substituem essa verificação.

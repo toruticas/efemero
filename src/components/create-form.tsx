@@ -24,7 +24,9 @@ import { upload } from "@vercel/blob/client";
 import { api } from "@/lib/api";
 import { CryptoSession } from "@/lib/crypto-session";
 import {
+  ANONYMOUS_FILE_BYTES,
   MAX_FILE_BYTES,
+  CIPHER_OVERHEAD_BYTES,
   MAX_MESSAGE_BYTES,
   MAX_TTL_MINUTES,
   publicPath,
@@ -45,9 +47,11 @@ type Reservation = {
 export function CreateForm({
   configured,
   account,
+  onCreated,
 }: {
   configured: boolean;
   account?: { username: string };
+  onCreated?: () => void;
 }) {
   const [kind, setKind] = useState<"message" | "file">("message"),
     [message, setMessage] = useState(""),
@@ -57,6 +61,7 @@ export function CreateForm({
     [ttl, setTtl] = useState(24),
     [unit, setUnit] = useState("hours"),
     [views, setViews] = useState(""),
+    [failures, setFailures] = useState(""),
     [slug, setSlug] = useState("");
   const [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(""),
@@ -67,6 +72,8 @@ export function CreateForm({
     [copied, setCopied] = useState(false),
     [revoked, setRevoked] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const maxFileBytes = account ? MAX_FILE_BYTES : ANONYMOUS_FILE_BYTES;
+  const maxFileMB = maxFileBytes / 1024 / 1024;
   function generatePassword() {
     const random = crypto.getRandomValues(new Uint8Array(20)),
       alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -108,8 +115,14 @@ export function CreateForm({
         (!Number.isInteger(maxReleases) || maxReleases < 1 || maxReleases > 100)
       )
         throw new Error("Escolha entre 1 e 100 liberações.");
-      if (kind === "file" && (!file || file.size > MAX_FILE_BYTES))
-        throw new Error("Escolha um arquivo de até 25 MB.");
+      const maxFailures = account && failures !== "" ? Number(failures) : null;
+      if (
+        maxFailures !== null &&
+        (!Number.isInteger(maxFailures) || maxFailures < 1 || maxFailures > 100)
+      )
+        throw new Error("Escolha entre 1 e 100 falhas para o kill-switch.");
+      if (kind === "file" && (!file || file.size > maxFileBytes))
+        throw new Error(`Escolha um arquivo de até ${maxFileMB} MB.`);
       const data =
         kind === "message"
           ? new TextEncoder().encode(message).buffer
@@ -130,9 +143,10 @@ export function CreateForm({
       reservation = await api<Reservation>("/api/artifacts/reserve", {
         mode: account ? "account" : "anonymous",
         ...(account && slug ? { slug } : {}),
-        size: data.byteLength + 4096,
+        size: data.byteLength + CIPHER_OVERHEAD_BYTES,
         ttlMinutes,
         maxReleases,
+        ...(account ? { maxFailures } : {}),
         ...start,
       });
       setProgress("Criptografando. O conteúdo continua neste dispositivo…");
@@ -188,6 +202,7 @@ export function CreateForm({
         ).href,
         recipientPassword: password,
       });
+      onCreated?.();
       setMessage("");
       setFile(null);
       if (fileInput.current) fileInput.current.value = "";
@@ -431,7 +446,7 @@ export function CreateForm({
               <span>
                 {file
                   ? `${(file.size / 1024 / 1024).toFixed(2)} MB · clique para trocar`
-                  : "Qualquer formato, até 25 MB"}
+                  : `Qualquer formato, até ${maxFileMB} MB`}
               </span>
               <span className="file-select">
                 Selecionar arquivo <ArrowRight size={15} />
@@ -501,7 +516,8 @@ export function CreateForm({
               />
             </div>
             <p className="field-help">
-              Um endereço publicado não poderá ser reutilizado.
+              Letras ASCII, números, hífen e sublinhado; até 48 caracteres. O
+              endereço será definitivo e não poderá ser reutilizado.
             </p>
           </div>
         )}
@@ -579,11 +595,43 @@ export function CreateForm({
           Cada entrega autorizada conta um acesso. Uma conexão interrompida pode
           consumi-lo.
         </p>
+        {account && (
+          <>
+            <div className="divider" />
+            <label htmlFor="failures">
+              Kill-switch <span className="muted">(opcional)</span>
+            </label>
+            <div className="views-input">
+              <ShieldCheck size={17} />
+              <input
+                id="failures"
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                placeholder="Desativado"
+                value={failures}
+                onChange={(e) => setFailures(e.target.value)}
+                disabled={busy}
+              />
+            </div>
+            <p className="field-help">
+              Exclui o artefato ao atingir este total de falhas, sem reiniciar
+              após acertos. Verificações abandonadas ou interrompidas contam
+              após 2 minutos. Qualquer pessoa com o link pode provocar a
+              exclusão deliberadamente.
+            </p>
+          </>
+        )}
+        <p className="field-help">
+          Conteúdo, endereço e regras não poderão ser alterados após a criação.
+          Você poderá bloquear e remover o artefato.
+        </p>
         <div className="policy-summary">
           <span className="status-dot" />
           <p>
-            O que acontecer primeiro encerra o acesso: prazo ou limite de
-            entregas.
+            O que acontecer primeiro encerra o acesso: prazo, limite de entregas
+            ou kill-switch, quando definido.
           </p>
         </div>
         <button

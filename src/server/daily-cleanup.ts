@@ -14,7 +14,7 @@ export async function dailyCleanup(
     const result = await service.cleanup(20);
     examined += result.examined;
     deleted += result.deleted;
-    if (result.examined < 20)
+    if (result.examined < 20 && !result.moreAttempts)
       return { examined, deleted, batches, limited: false };
     if (clock() >= deadline || batches === 500)
       return { examined, deleted, batches, limited: true };

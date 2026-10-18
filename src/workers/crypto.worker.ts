@@ -57,9 +57,16 @@ self.onmessage = async (event: MessageEvent) => {
       });
       password = "";
       loginState = "";
-      if (!login) throw new Error("Senha incorreta ou artefato indisponível.");
-      exportKey = login.exportKey;
-      result = { finishLoginRequest: login.finishLoginRequest };
+      if (!login) {
+        const bytes = crypto.getRandomValues(new Uint8Array(64));
+        result = {
+          finishLoginRequest: btoa(String.fromCharCode(...bytes)),
+          rejected: true,
+        };
+      } else {
+        exportKey = login.exportKey;
+        result = { finishLoginRequest: login.finishLoginRequest };
+      }
     } else if (action === "decrypt") {
       if (!exportKey) throw new Error("Autenticação necessária.");
       result = await decryptArtifact(

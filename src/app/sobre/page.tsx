@@ -30,6 +30,20 @@ export default function About() {
         iniciar a transferência. Uma conexão interrompida pode consumi-la. Não
         conseguimos comprovar leitura humana ou apagar cópias já recebidas.
       </p>
+      <h2>Kill-switch opcional para sua conta</h2>
+      <p>
+        Na criação, você pode escolher a exclusão após um total de falhas.
+        Acertos não zeram esse total. Verificações abandonadas ou interrompidas
+        contam após 2 minutos. Qualquer pessoa com o link pode provocar a
+        exclusão deliberadamente. O bloqueio é definitivo; a remoção física
+        segue a rotina diária. Conteúdo, endereço e regras não podem ser
+        editados.
+      </p>
+      <h2>Arquivos pequenos, compartilhamento simples</h2>
+      <p>
+        Links anônimos aceitam arquivos de até 2 MB. No seu espaço autenticado,
+        o limite é 5 MB. Mensagens podem ter até 256 KB.
+      </p>
       <h2>Senhas e infraestrutura também têm limites</h2>
       <p>
         Um comprometimento que obtenha os segredos OPAQUE e os registros do
@@ -41,8 +55,11 @@ export default function About() {
       <h2>Contas e histórico</h2>
       <p>
         Clerk cuida do login. O histórico mantém endereço, tamanho, datas,
-        estado e contagem de liberações, sem texto ou nome do arquivo em claro.
-        O vínculo do histórico com a conta é removido 30 dias após a exclusão do
+        estado e contadores agregados, sem texto ou nome do arquivo em claro. O
+        username não pode ser alterado. Aberturas da página são uma estimativa,
+        incluindo recargas e possíveis robôs; entregas autorizadas não comprovam
+        descriptografia ou leitura. Não guardamos histórico de destinatários. O
+        vínculo do histórico com a conta é removido 30 dias após a exclusão do
         conteúdo. O endereço permanece reservado para impedir que links antigos
         apontem para outro artefato.
       </p>

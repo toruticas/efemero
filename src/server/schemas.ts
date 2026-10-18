@@ -17,6 +17,7 @@ export const reserveSchema = z.strictObject({
   size: z.number().int().min(1).max(MAX_CIPHER_BYTES),
   ttlMinutes: z.number().int().min(1).max(MAX_TTL_MINUTES),
   maxReleases: z.number().int().min(1).max(100).nullable(),
+  maxFailures: z.number().int().min(1).max(100).nullable().optional(),
   registrationRequest: protocolMessage,
 });
 export const commitSchema = z.strictObject({
@@ -29,9 +30,15 @@ export const commitSchema = z.strictObject({
     ciphertext: z.string().regex(/^[A-Za-z0-9_-]{64}$/),
   }),
 });
-export const startSchema = z.strictObject({
+export const addressSchema = z.strictObject({
   namespace: z.string().min(1).max(24),
   slug: z.string().regex(SLUG_PATTERN),
+});
+export const historyCursorSchema = z.strictObject({
+  createdAt: z.iso.datetime({ offset: true }),
+  id: z.uuid(),
+});
+export const startSchema = addressSchema.extend({
   startLoginRequest: protocolMessage,
 });
 export const finishSchema = z.strictObject({
