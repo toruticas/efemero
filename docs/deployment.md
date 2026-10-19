@@ -19,7 +19,7 @@ O projeto `prj_VQR4e2oJNhmkv8lgCe4dpQ3RSLAC` pertence à equipe `team_iE6kuuhAKP
 - Neon: projeto `old-tooth-31877519`, branch `br-morning-sound-b8fxg85q` (`production`), banco `efemero`, PostgreSQL 17 em `aws-us-east-1`. Migração `001_initial` aplicada em transação pela integração autenticada e confirmada na tabela de versões. Pool de conexões habilitado e histórico de restauração configurado em zero.
 - Blob: store `store_UDExr0Rlu7Ri4KZG` (`efemero-production`), acesso privado, região `iad1`.
 - Variáveis do serviço configuradas somente em produção, incluindo os segredos OPAQUE e a conexão ao banco. O token Blob foi restringido a produção e marcado como sensível. Upload, commit, leitura e download foram validados pela aplicação publicada, sem copiar esse token para o navegador.
-- Clerk instalado na equipe: configuração `icfg_HRrgUWb30vz3mQ90d8bPt7gr`, plano Hobby, produto `clerk-alizarin-grass`. As duas chaves Clerk chegaram ao projeto para produção e preview. O Frontend API configurado é `clerk.rafael.run`, mas o navegador não consegue carregar seu script e o DNS público não apresenta o CNAME. O login fica pendente dos registros DNS solicitados pelo Clerk; use os valores apresentados no recurso, sem inventar destinos. `accounts.rafael.run` também não apresenta CNAME na consulta pública.
+- Clerk instalado na equipe: configuração `icfg_HRrgUWb30vz3mQ90d8bPt7gr`, plano Hobby, produto `clerk-alizarin-grass`. As duas chaves Clerk chegaram ao projeto para produção e preview. O Frontend API configurado é `clerk.rafael.run`. Em 19/10/2026 os cinco CNAMEs exigidos foram criados pelo CLI oficial e conferidos na API Vercel e no DNS público. O proprietário informou que concluiu a verificação DNS no Clerk. O script do Frontend API responde 200 por HTTPS e o formulário de login foi renderizado em Chromium; cadastro e sessão com conta real ainda precisam ser exercitados.
 - Plano Hobby mantido. O cron `0 3 * * *` agenda a limpeza diária, com vários lotes dentro de um orçamento de execução; a resposta indica `limited: true` se houver trabalho restante por limite de tempo ou de lotes. A inicialização das exclusões usa uma operação SQL em lote. O bloqueio por expiração é imediato e independente do agendador.
 
 O script de migração usa a importação padrão de `@next/env`, compatível com a execução ESM no Node.js 24. A conexão WebSocket da aplicação ao Neon foi validada em produção. Não copie os segredos locais para documentação ou para o Git.
@@ -67,7 +67,25 @@ Na integração nativa da Vercel, instalar o Clerk na equipe e conectar sua apli
 
 Referências: [instalação e vínculo Clerk](https://clerk.com/docs/guides/development/integrations/platforms/vercel-marketplace), [conectar recurso a um projeto Vercel](https://vercel.com/docs/integrations/install-an-integration/product-integration). A instalação do plugin Vercel no ChatGPT não instala nem conecta esse recurso por conta própria.
 
-O provider e os scripts do Clerk ficam na área de contas; a página compartilhada não carrega esse provider. O username é mantido pela aplicação e é imutável, com proteção no banco. Definir username e consultar histórico exigem identidade verificada no backend.
+### DNS do Clerk
+
+A aplicação continua em `efemero.rafael.run`. O domínio primário do Clerk é `rafael.run`, com Frontend API em `clerk.rafael.run` e portal em `accounts.rafael.run`. Os nomes abaixo são relativos a `rafael.run`; todos usam CNAME, TTL de 60 segundos, sem proxy.
+
+| Nome              | Destino                             |
+| ----------------- | ----------------------------------- |
+| `accounts`        | `accounts.clerk.services`           |
+| `clerk`           | `frontend-api.clerk.services`       |
+| `clk._domainkey`  | `dkim1.xx88d1upb0a2.clerk.services` |
+| `clk2._domainkey` | `dkim2.xx88d1upb0a2.clerk.services` |
+| `clkmail`         | `mail.xx88d1upb0a2.clerk.services`  |
+
+Os cinco registros estavam ausentes; os IPs observados antes eram respostas do curinga da Vercel. A criação individual preservou os 16 registros preexistentes, incluindo o TXT DMARC `v=DMARC1; p=quarantine`. Não trocar a política DMARC existente por uma política menos restritiva. Nameservers confirmados: `ns1.vercel-dns.com` e `ns2.vercel-dns.com`.
+
+Depois de salvar os registros, repetir a verificação em **Clerk → Domains → Configure** e concluir **Deploy certificates** na Overview / checklist de produção. Essa etapa do Clerk ativa o HTTPS da instância; consulte a [documentação de certificados](https://clerk.com/docs/guides/development/deployment/production#deploy-certificates). DNS aceito pela Vercel não comprova a emissão do certificado ou a ativação do domínio no Clerk. Conferir HTTPS do Frontend API e carregamento do formulário antes de considerar o login liberado.
+
+A operação de importação de zona do conector retornou erros sem alterar os registros. Para esta configuração foi usado `vercel dns add` individualmente, com equipe explícita e sessão própria do CLI. O diretório de autenticação e a cópia privada da zona ficam fora do repositório.
+
+O provider e os scripts do Clerk ficam na área de contas; a página compartilhada não carrega esse provider. O envio opcional de telemetria do SDK está desabilitado. Somente `/app`, `/sign-in` e `/sign-up` permitem workers `blob:` e conexões HTTPS a `*.protect.clerk.com` em portas adicionais, exigidas pela proteção de abuso do Clerk. Os scripts mantêm nonce e `strict-dynamic`, sem `unsafe-eval` em produção. O username é mantido pela aplicação e é imutável, com proteção no banco. Definir username e consultar histórico exigem identidade verificada no backend.
 
 ## Limpeza e limites
 

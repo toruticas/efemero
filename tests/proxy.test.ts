@@ -38,4 +38,49 @@ describe("response security policy", () => {
       vi.unstubAllEnvs();
     }
   });
+  it("allows Clerk Protect workers and port probes only on account pages", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CLERK_SECRET_KEY", "");
+    try {
+      for (const path of [
+        "/sign-in",
+        "/sign-up",
+        "/app",
+        "/sign-in/factor-one",
+      ]) {
+        const response = await proxy(
+          new NextRequest(`https://example.test${path}`),
+          {} as NextFetchEvent,
+        );
+        const policy = response.headers.get("content-security-policy")!;
+        expect(policy).toContain("worker-src 'self' blob:");
+        expect(policy).toContain("https://*.protect.clerk.com:*");
+        expect(policy).toMatch(
+          /frame-src[^;]*https:\/\/\*\.protect\.clerk\.com/,
+        );
+        expect(policy).not.toContain("'unsafe-eval'");
+        expect(policy).not.toContain("script-src 'unsafe-inline'");
+      }
+      for (const path of [
+        "/",
+        "/a/abc",
+        "/alice/contrato",
+        "/sign-in-lookalike/x",
+        "/api/artifacts/reserve",
+      ]) {
+        const response = await proxy(
+          new NextRequest(`https://example.test${path}`),
+          {} as NextFetchEvent,
+        );
+        const policy = response.headers.get("content-security-policy")!;
+        expect(policy).toContain("worker-src 'self';");
+        expect(policy).not.toContain("https://*.protect.clerk.com:*");
+        expect(policy).not.toMatch(
+          /frame-src[^;]*https:\/\/\*\.protect\.clerk\.com/,
+        );
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

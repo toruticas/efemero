@@ -4,7 +4,7 @@ Compartilhamento temporário de mensagens e arquivos, com criptografia no navega
 
 ## Estado
 
-Publicado em [efemero.rafael.run](https://efemero.rafael.run), com compartilhamento anônimo de mensagens e arquivos verificado em navegador real contra Neon e Blob privado. O login ainda depende da configuração DNS do Clerk. A suíte inclui testes com PostgreSQL real e concorrência. O repositório `toruticas/efemero` é privado; alterações em `main` disparam deploy automático. O plano Vercel permanece Hobby, com limpeza diária e bloqueio imediato de acesso na expiração. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação.
+Publicado em [efemero.rafael.run](https://efemero.rafael.run), com compartilhamento anônimo de mensagens e arquivos verificado em navegador real contra Neon e Blob privado. Os cinco CNAMEs do Clerk estão configurados e o formulário de login já carrega por HTTPS; cadastro e sessão com conta real ainda precisam ser exercitados. A suíte inclui testes com PostgreSQL real e concorrência. O repositório `toruticas/efemero` é privado; alterações em `main` disparam deploy automático. O plano Vercel permanece Hobby, com limpeza diária e bloqueio imediato de acesso na expiração. Não há fallback que aceite senhas em claro ou entregue conteúdo antes da autenticação.
 
 ## Requisitos acordados
 

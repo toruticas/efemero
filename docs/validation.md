@@ -35,7 +35,7 @@ A execução no navegador revelou uma incompatibilidade entre o CSP inicial e o 
 
 ## Pendências
 
-- DNS do Clerk: `/sign-in` retorna HTML, mas o script em `clerk.rafael.run` não carrega. A consulta pública não apresentou CNAME para `clerk.rafael.run` nem `accounts.rafael.run`. Configurar os registros exatos fornecidos pelo recurso Clerk e então verificar cadastro, entrada, sessão, username e histórico.
+- Clerk: os cinco CNAMEs foram configurados em 19/10/2026 e o DNS público está correto. O DNS e o HTTPS do Clerk foram ativados em 19/10/2026; o formulário de login renderiza em produção. Validar cadastro, entrada, sessão, username e histórico com uma conta real.
 - Confirmar a execução automática diária pelo agendador. A rota e sua autorização foram testadas manualmente; o teste não espera a próxima janela diária.
 - Exercitar Safari/iOS real e transferências no tamanho máximo em redes móveis antes de ampliar o uso.
 
@@ -50,3 +50,19 @@ Os testes usaram apenas artefatos sintéticos. Não comprovam prazos internos de
 - O navegador real de produção ainda não carrega o Clerk: erro de CORS no script servido por `clerk.rafael.run`, com tela sem campos de login. A configuração DNS exata do Clerk continua necessária para verificar cadastro/sessão e o painel autenticado de ponta a ponta em produção; os testes de painel com respostas simuladas não substituem essa verificação.
 - Publicação `f497122` concluída no domínio de produção. CI [39083399770](https://github.com/toruticas/efemero/actions/runs/39083399770) passou, incluindo testes em PostgreSQL real e build.
 - Chromium contra produção: arquivo binário de exatamente 2 MiB criado via OPAQUE/Blob privado, senha incorreta finalizada com prova rejeitada (404), senha correta autorizada (200), nome original recuperado no navegador e download idêntico byte a byte. O limite de uma entrega impediu novo início (404). Arquivo acima de 2 MiB foi bloqueado no navegador sem reserva; uma reserva cifrada acima do orçamento anônimo foi rejeitada pela API (400). `/api/account` sem sessão retornou 401. As chamadas de API não incluíram senha ou nome original do arquivo, e o navegador não registrou erros JavaScript. Os artefatos de QA foram revogados ou esgotados para remoção pelo fluxo normal.
+
+## DNS do Clerk — 19/10/2026
+
+- Valores exatos recebidos do prompt gerado pelo Clerk, incluindo os destinos DKIM e de e-mail específicos desta aplicação. Antes da alteração, nenhum dos cinco CNAMEs existia; havia resposta curinga da Vercel.
+- CLI oficial autenticado como `toruticascom`; projeto `efemero` e equipe `vercel-toruticascos-projects` confirmados antes das criações individuais. Cinco registros criados com sucesso. Nenhum plano ou serviço pago foi contratado.
+- Conferência pela API da Vercel: 21 registros no total; os 16 registros anteriores preservaram IDs, nomes, tipos, valores, TTLs, prioridades MX e comentários. DMARC mantido em `p=quarantine`.
+- Resolver DNS público retornou os cinco destinos CNAME esperados e os nameservers da Vercel. Não havia registros próprios desses nomes com valores errados; todos os cinco estavam ausentes.
+- Primeiro teste de navegador depois da mudança: `/sign-in` respondeu 200, mas o script Clerk ainda falhou. Requisição HTTPS ao script confirmou erro TLS no upstream, sem desabilitar verificação de certificado. Foi solicitado repetir a verificação do domínio no painel do Clerk; não considerar o formulário ou a sessão autenticada validados até esse teste passar.
+
+- O proprietário informou que concluiu a verificação no Clerk. O teste imediatamente posterior ainda recebeu erro `SSLV3_ALERT_HANDSHAKE_FAILURE` do upstream HTTPS em `clerk.rafael.run`; por enquanto a ativação do certificado não foi comprovada. Os CNAMEs públicos permanecem corretos.
+
+- Documentação oficial do Clerk confirmou uma etapa explícita **Deploy certificates** após o checklist de produção. Os CAA públicos permitem LetsEncrypt (`letsencrypt.org`) e Google Trust Services (`pki.goog`), além do emissor já existente; não foram removidos ou alterados. Foi solicitado concluir a ativação dos certificados no Clerk.
+
+- Rechecagem posterior: script `clerk.browser.js` respondeu 200, com tipo JavaScript e CORS permitido. Chromium renderizou os campos de identificador e senha e o botão Continuar. Os testes não desabilitaram verificação TLS.
+- O carregamento real revelou violações CSP no Clerk Protect: workers `blob:` e sondagens HTTPS em portas além de 443. Ajustadas somente as páginas `/app`, `/sign-in` e `/sign-up`, conforme a [documentação CSP do Clerk](https://clerk.com/docs/guides/secure/best-practices/csp-headers). As páginas públicas mantêm workers restritos à própria origem. Telemetria opcional do SDK desabilitada; proteções de abuso continuam habilitadas. O teste de política cobre os dois grupos de rotas e prefixos parecidos.
+- Typecheck, 47 testes locais e build de produção passaram após o ajuste CSP. A execução de formulário e sessão de um usuário real não foi automatizada.

@@ -23,7 +23,7 @@ export default async function AccountLayout({
     );
   const nonce = (await headers()).get("x-nonce") || undefined;
   return (
-    <ClerkProvider localization={ptBR} nonce={nonce} dynamic>
+    <ClerkProvider localization={ptBR} nonce={nonce} telemetry={false} dynamic>
       {children}
     </ClerkProvider>
   );

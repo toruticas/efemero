@@ -23,6 +23,15 @@ export default async function proxy(
   );
   const dev = process.env.NODE_ENV !== "production",
     authOrigin = clerkOrigin();
+  const accountPage = /^\/(app|sign-in|sign-up)(\/|$)/.test(
+    request.nextUrl.pathname,
+  );
+  // Clerk Protect needs blob workers and HTTPS probes on non-default ports.
+  // Keep these permissions scoped to pages that actually load Clerk.
+  const protectConnections = accountPage
+    ? " https://*.protect.clerk.com:*"
+    : "";
+  const protectFrames = accountPage ? " https://*.protect.clerk.com" : "";
   const csp = [
     "default-src 'self'",
     "base-uri 'none'",
@@ -32,9 +41,9 @@ export default async function proxy(
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
     "img-src 'self' data: blob: https://img.clerk.com https://images.clerk.dev",
-    `connect-src 'self' https://vercel.com/api/blob https://vercel.com/api/blob/ https://blob.vercel-storage.com https://*.blob.vercel-storage.com ${authOrigin} https://*.clerk.accounts.dev https://*.clerk.com${dev ? " ws: http://localhost:*" : ""}`,
-    `frame-src ${authOrigin || "'self'"} https://challenges.cloudflare.com`,
-    "worker-src 'self'",
+    `connect-src 'self' https://vercel.com/api/blob https://vercel.com/api/blob/ https://blob.vercel-storage.com https://*.blob.vercel-storage.com ${authOrigin} https://*.clerk.accounts.dev https://*.clerk.com${protectConnections}${dev ? " ws: http://localhost:*" : ""}`,
+    `frame-src ${authOrigin || "'self'"} https://challenges.cloudflare.com${protectFrames}`,
+    `worker-src 'self'${accountPage ? " blob:" : ""}`,
     "form-action 'self'",
     ...(dev ? [] : ["upgrade-insecure-requests"]),
   ].join("; ");
