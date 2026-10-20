@@ -30,6 +30,22 @@ export default async function AccountLayout({
     <ClerkProvider
       publishableKey={clerkPublishableKey()}
       localization={locale === "en" ? enUS : ptBR}
+      appearance={{
+        variables: {
+          colorPrimary: "var(--green)",
+          colorPrimaryForeground: "var(--on-accent)",
+          colorBackground: "var(--paper)",
+          colorForeground: "var(--ink)",
+          colorMuted: "var(--surface-soft)",
+          colorMutedForeground: "var(--muted)",
+          colorInput: "var(--field)",
+          colorInputForeground: "var(--ink)",
+          colorBorder: "var(--line)",
+          colorNeutral: "var(--neutral)",
+          colorModalBackdrop: "#000",
+          colorDanger: "var(--danger)",
+        },
+      }}
       nonce={nonce}
       telemetry={false}
       dynamic

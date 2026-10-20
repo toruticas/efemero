@@ -8,6 +8,8 @@ Recipients need the link and the artifact password. The URL contains no key, pas
 
 Repository documentation, code identifiers, comments, test descriptions, and maintainer-facing output use English. The product interface supports Brazilian Portuguese and English. Existing public routes and cryptographic protocol identifiers retain their original spelling for compatibility. See [internationalization](docs/internationalization.md) for language selection and translation maintenance.
 
+The interface follows the system light/dark preference automatically, including live preference changes and Clerk account forms. Theme selection uses CSS only, without a theme cookie, local storage, or another runtime dependency.
+
 Efemero also supports a single-container self-hosted installation with SQLite, local ciphertext storage, and no account provider. Cloud services are optional; the existing managed production deployment remains unchanged.
 
 ## Contents

@@ -1,7 +1,15 @@
+import type { Viewport } from "next";
 import { getI18n } from "@/lib/i18n/server";
 import { Header } from "@/components/header";
 import { I18nProvider } from "@/components/i18n-provider";
 import "./globals.css";
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f8f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#101a16" },
+  ],
+};
 export async function generateMetadata() {
   const { t } = await getI18n();
   return {
