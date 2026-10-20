@@ -6,8 +6,8 @@ import "./globals.css";
 export const viewport: Viewport = {
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f8f4" },
-    { media: "(prefers-color-scheme: dark)", color: "#101a16" },
+    { media: "(prefers-color-scheme: light)", color: "#f4f6f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c1418" },
   ],
 };
 export async function generateMetadata() {
