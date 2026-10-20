@@ -1,39 +1,39 @@
-# Protocolo do MVP
+# MVP protocol
 
-## Dependências e domínio
+## Dependencies and domain
 
-`@serenity-kit/opaque` está fixado em 1.1.0. A biblioteca implementa as primitivas OPAQUE; a aplicação não introduz um protocolo de senha próprio. O perfil `memory-constrained` é explícito em registro e abertura. O formato da aplicação é versão 1. Os testes exercitam a biblioteca real e comprovam que o mesmo registro recupera a mesma export key, senhas diferentes falham e IDs diferentes isolam os artefatos.
+`@serenity-kit/opaque` is pinned to 1.1.0. The library implements OPAQUE primitives; the application does not introduce a custom password protocol. The `memory-constrained` profile is explicit during registration and retrieval. The application format is version 1. Tests exercise the actual library and verify that the same record recovers the same export key, different passwords fail, and different IDs isolate artifacts.
 
-A autenticação vincula `client` ao UUID interno imutável do artefato e `server` à origem canônica. O UUID também é usado como `userIdentifier` na derivação da biblioteca. Username e slug apenas localizam esse registro.
+Authentication binds `client` to the artifact's immutable internal UUID and `server` to the canonical origin. The UUID is also used as `userIdentifier` in the library's derivation. Username and slug only locate that record.
 
-## Registro
+## Registration
 
-O navegador cria a mensagem inicial OPAQUE. `POST /api/artifacts/reserve` recebe mensagem inicial, tamanho máximo, prazo, limite e modalidade. Ele não aceita um campo de senha. O backend reserva UUID, endereço e caminho de storage, retorna a resposta OPAQUE e uma credencial aleatória de gerenciamento de 256 bits. Apenas o SHA-256 dessa credencial é armazenado.
+The browser creates the initial OPAQUE message. `POST /api/artifacts/reserve` receives the initial message, maximum size, lifetime, limit, and mode. It does not accept a password field. The backend reserves a UUID, address, and storage path, then returns the OPAQUE response and a random 256-bit management credential. Only that credential's SHA-256 hash is stored.
 
-O navegador finaliza o registro com o perfil fixo e recupera `registrationRecord` e `exportKey`. O valor `sessionKey` não é usado como chave de conteúdo.
+The browser completes registration with the fixed profile and recovers `registrationRecord` and `exportKey`. The `sessionKey` value is not used as a content key.
 
-## Criptografia
+## Encryption
 
-O payload em claro tem quatro bytes big-endian com o tamanho do cabeçalho JSON, o cabeçalho (`kind`, nome e MIME) e os bytes da mensagem ou arquivo. Todos esses dados são cifrados com AES-256-GCM, uma chave aleatória de 32 bytes e nonce aleatório de 12 bytes. O dado autenticado adicional é `artefatos:payload:v1:<UUID>`.
+The plaintext payload contains four big-endian bytes specifying the JSON header length, the header (`kind`, name, and MIME type), and the message or file bytes. All of this is encrypted using AES-256-GCM, a random 32-byte key, and a random 12-byte nonce. Additional authenticated data is `artefatos:payload:v1:<UUID>`.
 
-O ciphertext transmitido começa com um byte de versão (`1`), seguido de 12 bytes de nonce e do ciphertext com tag GCM. A chave de conteúdo é envolvida por outra operação AES-GCM, com nonce independente.
+The transmitted ciphertext starts with a version byte (`1`), followed by a 12-byte nonce and ciphertext with its GCM tag. The content key is wrapped using another AES-GCM operation with an independent nonce.
 
-A chave de envolvimento é derivada via HKDF-SHA-256: o material de entrada é a codificação UTF-8 da export key retornada pela biblioteca, o salt é o UUID e o contexto é `artefatos:key-wrap:v1`. O envelope armazena versão, nonce e chave cifrada em base64url. Não há derivação paralela apenas de senha e salt público.
+The wrapping key is derived through HKDF-SHA-256: input material is the UTF-8 encoding of the library's export key, the salt is the UUID, and the context is `artefatos:key-wrap:v1`. The envelope stores the version, nonce, and encrypted key in base64url. There is no parallel derivation from only a password and public salt. The existing `artefatos:*` context strings are protocol identifiers and must retain their spelling for compatibility.
 
-O navegador envia o ciphertext ao store privado e publica o registro e o envelope com `POST /api/artifacts/commit`, autenticado pela credencial de gerenciamento. A API verifica o objeto no caminho reservado antes da publicação. Nomes e MIME originais não são transmitidos em metadados públicos do upload.
+The browser sends ciphertext to the private store and publishes the record and envelope through `POST /api/artifacts/commit`, authenticated with the management credential. The API verifies the object at the reserved path before publication. Original names and MIME types are not transmitted as public upload metadata.
 
-## Abertura e entrega
+## Retrieval and delivery
 
-`POST /api/artifacts/access/start` recebe caminho e mensagem OPAQUE inicial. Os limites são aplicados antes de responder, porque um atacante pode abandonar a troca após verificar seu palpite. O estado do servidor é cifrado no banco, vinculado ao artefato e válido por no máximo dois minutos ou até a expiração do artefato.
+`POST /api/artifacts/access/start` receives the path and initial OPAQUE message. Limits apply before responding because an attacker can abandon the exchange after checking a guess. Server state is encrypted in the database, bound to the artifact, and valid for no more than two minutes or until artifact expiration.
 
-`POST /api/artifacts/access/finish` recebe o ID do handshake e a prova final. A transação bloqueia o artefato e consome o handshake, valida o prazo, o estado e a prova, incrementa o contador e, se necessário, esgota o artefato. Um handshake usado, inválido ou expirado não pode ser reapresentado; uma prova inválida consome o handshake, mas não consome uma liberação.
+`POST /api/artifacts/access/finish` receives the handshake ID and final proof. The transaction locks the artifact and consumes the handshake, validates deadline, state, and proof, increments the counter, and exhausts the artifact if necessary. A used, invalid, or expired handshake cannot be replayed; an invalid proof consumes the handshake but not a release.
 
-Somente após o commit da autorização a rota lê o objeto e responde com seu stream. O envelope da chave é enviado no cabeçalho `X-Wrapped-Key`; `X-Artifact-Id` vincula a resposta ao registro. Não há URL de GET reutilizável para contornar contadores. A resposta usa `private, no-store` e tipo binário. O cliente recupera a export key, abre o envelope e descriptografa. Conteúdo ativo nunca é renderizado como documento da origem do site.
+Only after authorization is committed does the route read and stream the object. The key envelope is sent in `X-Wrapped-Key`; `X-Artifact-Id` binds the response to the record. There is no reusable GET URL that could bypass counters. The response uses `private, no-store` and a binary content type. The client recovers the export key, opens the envelope, and decrypts. Active content is never rendered as a document on the site's origin.
 
-## Limites
+## Limitations
 
-OPAQUE não transforma senha humana em um segredo impossível de adivinhar. O servidor que possui seed e registro pode executar tentativas offline; o operador também tem essa capacidade. Separar os segredos do banco reduz o impacto de um vazamento isolado, sem proteger contra comprometimento completo da aplicação.
+OPAQUE does not turn a human password into an unguessable secret. A server holding the seed and record can make offline guesses; the operator also has this ability. Separating secrets from the database reduces the impact of an isolated leak without protecting against complete application compromise.
 
-O navegador precisa confiar no JavaScript entregue pelo serviço. CSP com nonce, ausência de analytics e isolamento dos scripts de login reduzem a superfície, mas não protegem contra um operador ou deploy malicioso. A versão atual não substitui uma avaliação criptográfica independente de produção.
+The browser must trust the JavaScript delivered by the service. A nonce-based CSP, absence of recipient analytics, and separation of login scripts reduce exposure, but do not protect against a malicious operator or deployment. The current version does not replace an independent production cryptographic assessment.
 
-Referências: [OPAQUE, RFC 9807](https://www.rfc-editor.org/rfc/rfc9807.html), [OPRF, RFC 9497](https://www.rfc-editor.org/rfc/rfc9497.html), [biblioteca](https://github.com/serenity-kit/opaque).
+References: [OPAQUE, RFC 9807](https://www.rfc-editor.org/rfc/rfc9807.html), [OPRF, RFC 9497](https://www.rfc-editor.org/rfc/rfc9497.html), [library](https://github.com/serenity-kit/opaque).

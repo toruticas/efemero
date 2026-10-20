@@ -21,7 +21,7 @@ describe("artifact protocol and lifecycle", () => {
   let now: Date,
     failures = 0;
   const serverIdentity = "https://example.test",
-    password = "uma-frase-longa-e-secreta";
+    password = "a-long-and-secret-passphrase";
   const objects = new Map<string, ArrayBuffer>();
   const storage: Storage = {
     async inspect(pathname) {
@@ -108,9 +108,9 @@ describe("artifact protocol and lifecycle", () => {
     const encrypted = await encryptArtifact(
       {
         kind: "message",
-        name: "secreto.txt",
+        name: "secret.txt",
         mime: "text/plain",
-        data: new TextEncoder().encode("somente o destinatário pode ler")
+        data: new TextEncoder().encode("only the recipient can read this")
           .buffer,
       },
       registration.exportKey,
@@ -185,7 +185,7 @@ describe("artifact protocol and lifecycle", () => {
       a.id,
     );
     expect(new TextDecoder().decode(data.data)).toBe(
-      "somente o destinatário pode ler",
+      "only the recipient can read this",
     );
     await expect(
       service.authorizeDelivery(
@@ -205,7 +205,7 @@ describe("artifact protocol and lifecycle", () => {
   });
   it("rejects an incorrect password without consuming an access", async () => {
     const a = await create(),
-      l = await login(a, "esta-senha-esta-incorreta");
+      l = await login(a, "this-password-is-incorrect");
     expect(l.proof).toBeUndefined();
     expect(await count(a.id)).toBe(0);
     const state = await database.db.query<{ sealed_state: string }>(
@@ -376,13 +376,13 @@ describe("artifact protocol and lifecycle", () => {
       "INSERT INTO accounts(id,clerk_id,username) VALUES($1,$2,$3)",
       [owner.id, "clerk-alice", owner.username],
     );
-    const a = await create(2, 60, owner, "contrato");
+    const a = await create(2, 60, owner, "contract");
     await expect(
       service.revoke(a.id, undefined, "other-owner"),
     ).rejects.toMatchObject({ status: 403 });
     expect((await service.history("other-owner")).artifacts).toEqual([]);
     expect((await service.history(owner.id)).artifacts[0].slug).toBe(
-      "contrato",
+      "contract",
     );
     await service.revoke(a.id, undefined, owner.id);
     now = new Date(now.getTime() + 17 * 60_000);
@@ -392,7 +392,7 @@ describe("artifact protocol and lifecycle", () => {
       service.reserve(
         {
           mode: "account",
-          slug: "contrato",
+          slug: "contract",
           size: 4096,
           ttlMinutes: 60,
           maxReleases: 1,
@@ -573,8 +573,8 @@ describe("artifact protocol and lifecycle", () => {
   });
   it("accumulates failed proofs once, preserves them after success and destroys at the threshold", async () => {
     const owner = await account(),
-      a = await create(10, 60, owner, "segredo", 2);
-    const wrong = await login(a, "senha-errada-de-teste");
+      a = await create(10, 60, owner, "secret", 2);
+    const wrong = await login(a, "incorrect-test-password");
     expect(wrong.proof).toBeUndefined();
     const proof = invalidProof();
     await expect(
@@ -648,7 +648,7 @@ describe("artifact protocol and lifecycle", () => {
   it("counts abandoned challenges before issuing more challenges, even without cleanup", async () => {
     const owner = await account(),
       a = await create(10, 60, owner, undefined, 1);
-    await login(a, "outra-senha-incorreta");
+    await login(a, "another-incorrect-password");
     now = new Date(now.getTime() + 120_000);
     await expect(login(a)).rejects.toMatchObject({ status: 404 });
     expect((await artifact(a.id)).failed_count).toBe(1);

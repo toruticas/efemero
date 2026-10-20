@@ -1,81 +1,81 @@
-# Decisões de arquitetura
+# Architecture decisions
 
-## Identificação e identidade
+## Addressing and identity
 
-O caminho curto é um localizador, não uma credencial. O identificador interno imutável do artefato vincula registro OPAQUE e contexto criptográfico, independentemente de username e slug públicos. Slugs devem ser únicos por usuário e não devem ser reutilizados automaticamente após expiração. Prefixos de sistema são reservados.
+The short path is a locator, not a credential. The artifact's immutable internal identifier binds its OPAQUE registration and cryptographic context independently of the public username and slug. Slugs must be unique per user and must not be automatically reused after expiration. System prefixes are reserved.
 
-Clerk identifica o criador e autoriza a administração dos seus próprios artefatos. A autenticação do destinatário é independente da conta do criador e não exige login no Clerk.
+Clerk identifies creators and authorizes management of their own artifacts. Recipient authentication is independent of the creator's account and does not require Clerk login.
 
-## Autenticação e criptografia
+## Authentication and encryption
 
-Um registro OPAQUE é criado por artefato. A API nunca recebe a senha original. O navegador gera uma chave aleatória de conteúdo, cifra o payload com criptografia autenticada e protege essa chave usando material derivado da `export_key` do OPAQUE, com separação de contexto e vínculo ao artefato.
+An OPAQUE record is created for each artifact. The API never receives the original artifact password. The browser generates a random content key, encrypts the payload using authenticated encryption, and protects that key with material derived from the OPAQUE `export_key`, using context separation and artifact binding.
 
-A `export_key` fica no cliente. A `session_key` é conhecida por cliente e servidor e não deve ser usada para cifrar a chave do conteúdo. Não incluir uma derivação alternativa apenas de senha e salt público que crie um teste offline independente do OPAQUE.
+The `export_key` stays on the client. The `session_key` is known to both client and server and must not be used to encrypt the content key. Do not add an alternative derivation using only the password and a public salt that would create an offline test independent of OPAQUE.
 
-A aplicação usa uma biblioteca OPAQUE existente; não implementa primitivas ou um protocolo de desafio e resposta próprio. Parâmetros e formato devem ter versionamento. A revisão da biblioteca deve verificar o suporte ao navegador, runtime Node, endurecimento de senha e proteções de implementação.
+The application uses an existing OPAQUE library; it does not implement cryptographic primitives or a custom challenge-response protocol. Parameters and formats must be versioned. Library review must cover browser support, the Node runtime, password hardening, and implementation protections.
 
-O servidor mantém os segredos OPAQUE fora do banco. Um vazamento isolado de banco/storage e um comprometimento da aplicação inteira têm propriedades distintas. Seed OPRF e registro permitem testes offline mesmo sem a chave privada AKE. A conservação, versão e rotação desses segredos devem respeitar a vida útil dos registros; a perda da seed pode tornar o conteúdo irrecuperável mesmo com a senha correta.
+The server keeps OPAQUE secrets outside the database. An isolated database/storage leak and complete application compromise have different properties. The OPRF seed and a record enable offline guessing even without the AKE private key. Secret retention, versioning, and rotation must respect record lifetimes; losing the seed can make content unrecoverable even with the correct password.
 
-## Fluxo de criação
+## Creation flow
 
-1. Reservar um artefato pendente e aplicar quotas antes de iniciar operações custosas.
-2. Executar registro OPAQUE no navegador e no backend, vinculando-o à reserva autorizada.
-3. Criptografar no navegador, incluindo nomes originais e metadados sensíveis.
-4. Enviar ciphertext diretamente ao storage privado mediante autorização restrita ao objeto e ao tamanho.
-5. Validar conclusão do upload antes de publicar o artefato.
+1. Reserve a pending artifact and enforce quotas before starting expensive operations.
+2. Perform OPAQUE registration in the browser and backend, binding it to the authorized reservation.
+3. Encrypt in the browser, including original names and sensitive metadata.
+4. Upload ciphertext directly to private storage with authorization restricted to the object and size.
+5. Validate upload completion before publishing the artifact.
 
-Reservas e uploads abandonados têm prazo e são removidos pela limpeza. Callbacks de upload não podem reativar artefatos revogados ou expirados.
+Abandoned reservations and uploads have deadlines and are removed by cleanup. Upload callbacks cannot reactivate revoked or expired artifacts.
 
-## Fluxo de entrega
+## Delivery flow
 
-1. Abrir a página não consome liberação nem entrega o payload.
-2. Aplicar rate limiting ao início do handshake, inclusive quando o cliente abandona antes da prova final.
-3. Validar a prova OPAQUE final e impedir replay do estado temporário.
-4. Em decisão atômica no banco primário, verificar estado, prazo e limite; consumir uma liberação.
-5. Transmitir ciphertext pelo gateway autorizado, sem credenciais do storage ou link reutilizável que permita contornar a política.
-6. Desbloquear a chave e descriptografar no navegador.
+1. Opening a page does not consume a release or deliver the payload.
+2. Rate-limit handshake starts, including when the client abandons the exchange before the final proof.
+3. Validate the final OPAQUE proof and prevent temporary-state replay.
+4. Atomically check state, deadline, and limits in the primary database; consume one release.
+5. Stream ciphertext through the authorized gateway, without storage credentials or a reusable link that could bypass policy.
+6. Unwrap the key and decrypt in the browser.
 
-O MVP conta a liberação ao iniciar a entrega. Falhas de conexão podem consumi-la. A conclusão humana da leitura não é verificável. Estado de autenticação não depende da memória de uma única Function. Falhas no banco bloqueiam a entrega.
+The MVP counts a release when authorizing delivery. Connection failures may consume it. Human reading completion is not verifiable. Authentication state does not depend on a single Function's memory. Database failures block delivery.
 
-## Expiração e exclusão
+## Expiration and deletion
 
-O backend usa horários absolutos calculados pelo servidor e permite combinar prazo com número máximo de liberações. Existe prazo máximo obrigatório. A primeira condição atingida bloqueia novas entregas.
+The backend uses absolute deadlines calculated by the server and allows a lifetime to be combined with a maximum release count. A maximum lifetime is mandatory. The first condition reached blocks new deliveries.
 
-A verificação acontece na requisição, não depende do cron. A limpeza remove objetos com novas tentativas e trata uploads órfãos. Entregas já autorizadas têm janela máxima explícita. Exclusão física de dados/caches do provedor pode ter atraso; não prometer apagamento de cópias externas ou imediato de toda a infraestrutura.
+Checks happen on requests and do not depend on cron. Cleanup deletes objects with retries and handles orphaned uploads. Already authorized deliveries have an explicit maximum window. Physical deletion from provider storage/caches can be delayed; do not promise erasure of external copies or immediate removal across all infrastructure.
 
-O painel retém apenas o histórico mínimo com política de retenção documentada. Expiração do payload não implica retenção ilimitada de seus metadados.
+The dashboard retains metadata under the documented history policy. Payload expiration does not mean all metadata is erased: route tombstones remain indefinitely to prevent address reuse, including the public namespace and timestamps. See the [README retention details](../README.md#what-remains-after-deletion).
 
-## Segurança da aplicação
+## Application security
 
-- Bucket privado e autorização junto à leitura do objeto.
-- Respostas de conteúdo com `Cache-Control: private, no-store`.
-- Mensagens renderizadas como texto; conteúdo ativo não executa na origem da aplicação.
-- Senhas, chaves, material intermediário e provas não entram em logs ou analytics.
-- Página de abertura sem scripts de terceiros desnecessários.
-- Limites de tamanho, prazo, frequência e armazenamento para contas e anônimos.
-- Credencial de revogação anônima independente da senha compartilhada.
-- Testes reais de autenticação, senha incorreta, isolamento entre artefatos, replay, concorrência, expiração, quotas e exclusão.
+- Private storage and authorization immediately before object access.
+- Content responses use `Cache-Control: private, no-store`.
+- Messages render as text; active content does not execute on the application origin.
+- Passwords, keys, intermediate material, and proofs must not enter logs or analytics.
+- Retrieval pages avoid unnecessary third-party scripts.
+- Size, lifetime, frequency, and storage limits for accounts and anonymous users.
+- Anonymous revocation credential independent of the shared password.
+- Real tests for authentication, incorrect passwords, artifact isolation, replay, concurrency, expiration, quotas, and deletion.
 
-## Operação inicial
+## Initial operations
 
-Arquivos novos: até 2 MiB em links anônimos e 5 MiB em artefatos da conta, mais até 4 KiB de envelope cifrado no orçamento do backend. O navegador verifica o tamanho original; o servidor impõe o limite do ciphertext sem conhecer o conteúdo. Artefatos antigos preservam sua política até expirar. Upload direto ao Blob privado e download por streaming. Vercel Cron executa a limpeza diária no plano Hobby; o bloqueio temporal funciona independentemente do cron. A configuração de serviços reais e segredos ocorre por canais seguros, nunca por commits.
+New files: up to 2 MiB for anonymous links and 5 MiB for account artifacts, plus up to 4 KiB of encrypted-format overhead in the backend budget. The browser checks original size; the server enforces the ciphertext limit without knowing the content. Existing artifacts retain their policy until expiration. Uploads go directly to private Blob storage; downloads are streamed. Vercel Cron runs daily cleanup on Hobby; time-based access blocking works independently of cron. Actual services and secrets are configured through secure channels, never commits.
 
-Publicação e exposição pública exigem comportamento completo e serviços configurados. Não substituir o produto por uma demonstração que entregue ciphertext antes da autenticação ou que guarde senhas/chaves em claro.
+Deployment and public availability require complete behavior and configured services. Do not replace the product with a demonstration that delivers ciphertext before authentication or stores plaintext passwords/keys.
 
-## Área autenticada e estatísticas
+## Account area and statistics
 
-O username é escolhido uma vez, com proteção também por trigger no Postgres. O ID é aleatório ou um slug ASCII de até 48 caracteres, único no namespace do usuário. Não existem rotas de edição de conteúdo, endereço ou regras. A reserva só pode ser publicada uma vez. Revogar pelo painel usa a identidade Clerk verificada e bloqueia novas entregas definitivamente, removendo registro OPAQUE e chave envelopada e agendando a exclusão física. Não há desbloqueio ou reutilização de endereço.
+A username is selected once, with protection also enforced by a PostgreSQL trigger. The ID is random or an ASCII slug of up to 48 characters, unique within the user's namespace. There are no routes for editing content, addresses, or rules. A reservation can be published only once. Dashboard revocation uses verified Clerk identity, permanently blocks new deliveries, removes the OPAQUE record and wrapped key, and schedules physical deletion. There is no unblocking or address reuse.
 
-O histórico usa paginação por `(created_at, id)` e filtra sempre pelo proprietário autenticado, sem limite global de 100 itens. Mantém apenas metadados e contadores por até 30 dias após o purge. Depois disso, o vínculo com a conta e os contadores são removidos pela limpeza. Os caminhos públicos continuam reservados.
+History uses `(created_at, id)` pagination and always filters by the authenticated owner, without a global 100-item limit. It lists metadata and counters for up to 30 days after purge. Cleanup subsequently removes the direct account association and counters. Public paths remain reserved; their username namespace remains identifiable even after the owner foreign key is cleared.
 
-Aberturas da página são contagens agregadas de um POST executado quando o navegador monta o visualizador; prefetch do HTML não incrementa o contador. Recargas, robôs que executem JavaScript e requisições deliberadas podem inflar a estimativa. Não são visitantes únicos: não há cookies de analytics, impressão digital ou identificação de destinatários. Rate limiting usa os buckets HMAC temporários já existentes. A contagem começou nesta evolução; não há reconstrução de tráfego anterior.
+Page opens are aggregate counts from a POST sent when the browser mounts the viewer; HTML prefetch does not increment the counter. Reloads, JavaScript-capable bots, and deliberate requests may inflate the estimate. These are not unique visitors: there are no analytics cookies, fingerprinting, or recipient identification. Rate limiting uses the existing temporary HMAC buckets. Counting began with the account-area update; previous traffic is not reconstructed.
 
-O servidor conta entregas autorizadas antes de transmitir bytes. Não sabe se a descriptografia terminou ou se houve leitura. Um callback do navegador não comprovaria essas ações, por isso não foi adicionado um contador chamado “descriptografias”.
+The server counts authorized deliveries before transmitting bytes. It does not know whether decryption completed or someone read the content. A browser callback would not prove those actions, so no counter called “decryptions” was added.
 
-## Kill-switch e OPAQUE
+## Kill-switch and OPAQUE
 
-Política opcional apenas para artefatos da conta, de 1 a 100 falhas acumuladas. Acertos não zeram o contador. Uma prova final inválida consome o desafio uma única vez e conta uma falha. O cliente OPAQUE detecta a senha errada localmente: o worker produz uma prova aleatória inválida para encerrar essa tentativa, sem mandar senha, hash estático ou verificador reutilizável. A API nunca entrega ciphertext nessa situação.
+An optional policy for account artifacts only, from 1 to 100 accumulated failures. Successful attempts do not reset the counter. An invalid final proof consumes its challenge once and counts as a failure. The OPAQUE client detects an incorrect password locally: the Worker produces a random invalid proof to conclude that attempt, without sending the password, a static hash, or a reusable verifier. The API never delivers ciphertext in this case.
 
-Um cliente modificado pode omitir a mensagem final, por isso desafios sem conclusão contam após 120 segundos. Isso inclui abandono da página e falhas de rede, mesmo com senha correta. O backend resolve esses desafios sob bloqueio do artefato antes de aceitar novos inícios ou provas finais; a rotina diária também os processa. A avaliação não depende do cron para impedir novas entregas. O número de desafios pendentes é limitado ao orçamento restante, evitando ultrapassagem por concorrência. Quando todos os slots estão em uso, um novo início recebe 429 sem destruir antecipadamente o artefato.
+A modified client can omit the final message, so unfinished challenges count after 120 seconds. This includes leaving the page and network failures, even with the correct password. The backend settles these challenges under the artifact lock before accepting new starts or final proofs; daily cleanup also processes them. Evaluation does not depend on cron to block new deliveries. Pending challenges are bounded by the remaining budget, preventing concurrent over-allocation. When all slots are in use, a new start receives 429 without destroying the artifact early.
 
-Ao atingir o limite, o estado passa a `destroyed`: provas pendentes deixam de valer, registro e chave envelopada são eliminados na mesma transação e a remoção do Blob privado é agendada respeitando entregas já autorizadas e tokens de upload emitidos. Qualquer pessoa que conheça o link pode provocar o kill-switch deliberadamente. Esse risco é inseparável da política e aparece na criação; o recurso vem desativado.
+At the limit, state becomes `destroyed`: pending proofs cease to be valid, the record and wrapped key are removed in the same transaction, and private Blob deletion is scheduled while respecting authorized deliveries and issued upload tokens. Anyone who knows the link can deliberately trigger the kill-switch. This risk is inherent to the policy and is displayed at creation; the feature is disabled by default.

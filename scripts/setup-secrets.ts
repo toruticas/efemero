@@ -20,10 +20,10 @@ async function main() {
     }
   await writeFile(path, current.trim() + "\n", { mode: 0o600 });
   console.info(
-    "Segredos ausentes gerados em .env.local (ignorado pelo Git). Nenhum valor foi exibido; os valores existentes foram preservados.",
+    "Missing secrets generated in .env.local (Git-ignored). No values were printed; existing values were preserved.",
   );
 }
 main().catch(() => {
-  console.error("Não foi possível gerar os segredos.");
+  console.error("Could not generate secrets.");
   process.exitCode = 1;
 });

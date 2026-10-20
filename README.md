@@ -1,335 +1,337 @@
 # Efemero
 
-Compartilhamento temporário de mensagens e arquivos, com criptografia no navegador, autenticação por senha antes da entrega e políticas de expiração aplicadas pelo servidor.
+Temporary message and file sharing with browser-side encryption, password authentication before delivery, and server-enforced expiration policies.
 
-**Aplicação:** [efemero.rafael.run](https://efemero.rafael.run). **Repositório:** privado, em `toruticas/efemero`. O nome do projeto, dos identificadores e do domínio usa a forma ASCII `efemero`.
+**Application:** [efemero.rafael.run](https://efemero.rafael.run). **Repository:** private, at `toruticas/efemero`. The project name, identifiers, and domain use the ASCII spelling `efemero`.
 
-O destinatário precisa do link e da senha do artefato. A URL não contém chave, senha ou fragmento secreto. O servidor controla novas entregas; nenhuma política consegue apagar uma cópia que o destinatário já recebeu.
+Recipients need the link and the artifact password. The URL contains no key, password, or secret fragment. The server controls new deliveries; no policy can erase a copy a recipient has already received.
 
-## Índice
+Repository documentation, code identifiers, comments, test descriptions, and maintainer-facing output use English. The product interface is currently in Brazilian Portuguese. Existing public routes and cryptographic protocol identifiers retain their original spelling for compatibility.
 
-- [Estado e alcance da validação](#estado-e-alcance-da-validação)
-- [Modelo do produto](#modelo-do-produto)
-- [Arquitetura e escolhas de tecnologia](#arquitetura-e-escolhas-de-tecnologia)
-- [Senha, OPAQUE e chaves de conteúdo](#senha-opaque-e-chaves-de-conteúdo)
-- [Fluxos de criação e abertura](#fluxos-de-criação-e-abertura)
-- [Expiração, kill-switch e remoção](#expiração-kill-switch-e-remoção)
-- [Privacidade, estatísticas e retenção](#privacidade-estatísticas-e-retenção)
-- [Limites e proteção contra abuso](#limites-e-proteção-contra-abuso)
-- [Riscos e limites de segurança](#riscos-e-limites-de-segurança)
-- [Desenvolvimento e configuração](#desenvolvimento-e-configuração)
-- [Publicação e operação](#publicação-e-operação)
-- [Estrutura do repositório e API](#estrutura-do-repositório-e-api)
-- [Validação e próximos trabalhos](#validação-e-próximos-trabalhos)
+## Contents
 
-## Estado e alcance da validação
+- [Status and validation scope](#status-and-validation-scope)
+- [Product model](#product-model)
+- [Architecture and technology choices](#architecture-and-technology-choices)
+- [Passwords, OPAQUE, and content keys](#passwords-opaque-and-content-keys)
+- [Creation and retrieval flows](#creation-and-retrieval-flows)
+- [Expiration, kill-switch, and removal](#expiration-kill-switch-and-removal)
+- [Privacy, statistics, and retention](#privacy-statistics-and-retention)
+- [Limits and abuse prevention](#limits-and-abuse-prevention)
+- [Security risks and limitations](#security-risks-and-limitations)
+- [Development and configuration](#development-and-configuration)
+- [Deployment and operations](#deployment-and-operations)
+- [Repository structure and API](#repository-structure-and-api)
+- [Validation and future work](#validation-and-future-work)
 
-O projeto possui compartilhamento anônimo, área de conta, username imutável, IDs personalizados, histórico paginado, contadores agregados, revogação e kill-switch opcional implementados. A infraestrutura atual usa Vercel Hobby, Neon, Blob privado e Clerk.
+## Status and validation scope
 
-Na verificação de 19/10/2026:
+The project implements anonymous sharing, an account area, immutable usernames, custom IDs, paginated history, aggregate counters, revocation, and an optional kill-switch. The current infrastructure uses Vercel Hobby, Neon, private Blob storage, and Clerk.
 
-- O compartilhamento anônimo foi exercitado em Chromium contra os serviços reais: criação, senha incorreta, descriptografia de mensagem, download com bytes idênticos, revogação, limite de uma entrega e expiração sem depender do cron. Também foi transferido um arquivo anônimo de exatamente 2 MiB.
-- Os cinco CNAMEs do Clerk estão configurados. HTTPS e carregamento dos formulários de entrada e cadastro funcionam. `/app` sem sessão redireciona para a entrada. As páginas públicas verificadas não carregam o SDK do Clerk.
-- A última CI da implementação passou com **47 testes**, PostgreSQL 17 real, checagem de tipos, formatação e build de produção. O número descreve essa revisão, não uma garantia permanente.
-- **Cadastro, verificação de e-mail, entrada e uso do painel com uma conta real em produção ainda precisam de validação de ponta a ponta.** Os testes de autorização no backend e de componentes com respostas simuladas não substituem esse exercício.
-- A rota de limpeza e sua autorização foram testadas manualmente; isso não comprova a execução automática da próxima janela diária nem os prazos internos de exclusão dos provedores.
+As of the 2026-10-19 verification:
 
-O projeto ainda não passou por auditoria criptográfica independente. Os limites abaixo fazem parte do modelo de segurança, mesmo quando todos os testes passam. O [registro de validação](docs/validation.md) contém evidências datadas; entradas antigas descrevem o estado da época e podem anteceder correções posteriores.
+- Anonymous sharing was exercised in Chromium against the actual services: creation, incorrect passwords, message decryption, byte-identical downloads, revocation, a single-delivery limit, and expiration without relying on cron. An anonymous file of exactly 2 MiB was also transferred.
+- The five Clerk CNAME records are configured. HTTPS and rendering of the sign-in and sign-up forms work. `/app` redirects to sign-in without a session. The public pages inspected do not load the Clerk SDK.
+- The latest implementation CI passed with **47 tests**, real PostgreSQL 17, type checking, formatting, and a production build. This count describes that revision, not a permanent guarantee.
+- **Sign-up, email verification, sign-in, and dashboard use with a real production account still require end-to-end validation.** Backend authorization tests and component tests with simulated responses do not replace that exercise.
+- The cleanup route and its authorization were tested manually; this does not prove execution in the next scheduled daily window or the providers' internal deletion timelines.
 
-## Modelo do produto
+The project has not undergone an independent cryptographic audit. The limitations below are part of the security model even when every test passes. The [validation log](docs/validation.md) contains dated evidence; older entries describe the state at that time and may precede later fixes.
 
-### Artefatos e endereços
+## Product model
 
-Um artefato contém uma mensagem ou um arquivo. Conteúdo e política são definidos na criação e permanecem imutáveis depois da publicação.
+### Artifacts and addresses
 
-| Modalidade | Formato do endereço | Identificação e gerenciamento                                                                           |
-| ---------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
-| Anônima    | `/a/:id`            | Dispensa login; ID aleatório e credencial separada para revogação.                                      |
-| Conta      | `/:username/:id`    | Exige sessão Clerk e username; permite ID aleatório ou personalizado e gerenciamento pelo proprietário. |
+An artifact contains a message or a file. Its content and policy are set at creation and remain immutable after publication.
 
-O ID anônimo usa 9 bytes aleatórios codificados em base64url, resultando em 12 caracteres. Um ID personalizado aceita de 1 a 48 caracteres ASCII, começa com letra ou número e pode conter letras, números, `_` e `-`. IDs personalizados podem ser previsíveis: a segurança do conteúdo não deve depender de esconder o endereço.
+| Mode      | Address format   | Identity and management                                                                    |
+| --------- | ---------------- | ------------------------------------------------------------------------------------------ |
+| Anonymous | `/a/:id`         | No login required; random ID and a separate revocation credential.                         |
+| Account   | `/:username/:id` | Requires a Clerk session and username; supports random or custom IDs and owner management. |
 
-O username tem de 3 a 24 caracteres, começa com letra minúscula e aceita letras minúsculas, números, `_` e `-`. Nomes usados pelo sistema são reservados. A imutabilidade é aplicada pela API e por um trigger no banco. O username é público nas URLs e não deve conter informação que o criador queira manter privada.
+Anonymous IDs use 9 random bytes encoded as base64url, producing 12 characters. A custom ID accepts 1 to 48 ASCII characters, starts with a letter or digit, and may contain letters, digits, `_`, and `-`. Custom IDs can be predictable: content security must not depend on hiding the address.
 
-Uma combinação de prefixo e ID nunca é reutilizada, mesmo após a remoção do conteúdo. Isso evita que um link antigo passe a apontar para um novo artefato. Essa decisão exige manter registros residuais no banco, com consequências de privacidade e crescimento descritas adiante.
+Usernames contain 3 to 24 characters, start with a lowercase letter, and allow lowercase letters, digits, `_`, and `-`. System names are reserved. Immutability is enforced by the API and a database trigger. The username is public in URLs and should not contain information the creator wants to keep private.
 
-### Política definida na criação
+A prefix and ID combination is never reused, even after content removal. This prevents an old link from pointing to a new artifact. The decision requires retaining residual database records, with privacy and growth implications described below.
 
-Todo artefato tem um prazo obrigatório. Também pode ter um limite de entregas autorizadas e, na modalidade de conta, um limite de falhas de senha.
+### Policy set at creation
 
-Não há atualização de conteúdo, troca ou recuperação da senha do artefato, extensão de prazo, mudança de ID, alteração de limites ou desbloqueio. O proprietário pode revogar/remover o artefato de forma permanente. Para publicar outra versão, cria outro artefato em outro endereço.
+Every artifact has a mandatory lifetime. It may also have an authorized-delivery limit and, in account mode, a password-failure limit.
 
-O login Clerk autentica o **criador** e autoriza histórico e gerenciamento. A senha do artefato autentica o **destinatário** e permite recuperar a chave de conteúdo no navegador. Entrar na conta não substitui essa senha nem oferece uma função de recuperação do conteúdo. A senha de login, quando usada pelo Clerk, pertence a um fluxo separado da senha do artefato.
+There is no content update, artifact-password change or recovery, lifetime extension, ID change, policy adjustment, or unblocking. The owner can permanently revoke/remove an artifact. Publishing another version requires creating a new artifact at a different address.
 
-## Arquitetura e escolhas de tecnologia
+Clerk login authenticates the **creator** and authorizes history and management. The artifact password authenticates the **recipient** and enables content-key recovery in the browser. Signing into an account does not replace that password or provide content recovery. A login password, when used by Clerk, belongs to a separate flow from the artifact password.
+
+## Architecture and technology choices
 
 ```mermaid
 flowchart LR
-  C["Navegador do criador<br/>OPAQUE e criptografia em Worker"]
-  R["Navegador do destinatário<br/>OPAQUE e descriptografia local"]
-  A["Next.js na Vercel<br/>API, autorização e políticas"]
-  D[("Neon / PostgreSQL<br/>metadados, registros e filas")]
-  B[("Vercel Blob privado<br/>conteúdo cifrado")]
-  K["Clerk<br/>identidade dos criadores"]
-  T["Cron diário<br/>limpeza e reconciliação"]
+  C["Creator's browser<br/>OPAQUE and encryption in a Worker"]
+  R["Recipient's browser<br/>OPAQUE and local decryption"]
+  A["Next.js on Vercel<br/>API, authorization, and policies"]
+  D[("Neon / PostgreSQL<br/>metadata, records, and queues")]
+  B[("Private Vercel Blob<br/>encrypted content")]
+  K["Clerk<br/>creator identity"]
+  T["Daily cron<br/>cleanup and reconciliation"]
 
-  C -->|"Registro OPAQUE e envelope cifrado"| A
-  C -->|"Upload direto de ciphertext"| B
-  R <-->|"Desafio e prova OPAQUE"| A
-  A -->|"Ciphertext após autorização"| R
+  C -->|"OPAQUE registration and encrypted key envelope"| A
+  C -->|"Direct ciphertext upload"| B
+  R <-->|"OPAQUE challenge and proof"| A
+  A -->|"Ciphertext after authorization"| R
   A <--> D
-  B -->|"Leitura privada pelo backend"| A
-  K -->|"Sessão da conta"| A
+  B -->|"Private backend read"| A
+  K -->|"Account session"| A
   T --> A
 ```
 
-Na operação normal, o navegador vê senha, texto, arquivo e chaves em claro. A API recebe mensagens OPAQUE e metadados necessários às políticas; o Blob recebe bytes cifrados. O servidor tem segredos próprios de autenticação e acesso à infraestrutura. Essa separação reduz a exposição de dados, mas não torna o operador incapaz de atacar senhas ou de modificar o frontend servido ao usuário.
+During normal operation, the browser sees the password, text, file, and keys in plaintext. The API receives OPAQUE messages and metadata required to enforce policies; Blob receives encrypted bytes. The server holds its own authentication and infrastructure-access secrets. This separation reduces data exposure, but does not make the operator unable to attack passwords or modify the frontend delivered to users.
 
-| Tecnologia                             | Função e motivo da escolha                                                                                   | Custo ou limitação da escolha                                                                                                    |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| Next.js 16, React 19 e TypeScript      | Interface e API no mesmo projeto, com integração direta à Vercel.                                            | Dependência do framework, das atualizações de segurança e da configuração de cache, headers e runtime.                           |
-| Vercel Functions, runtime Node.js      | Backend sem manter um servidor dedicado; recebe provas e transmite o objeto autorizado.                      | Duração limitada, dependência da plataforma e consumo de requisições e transferência. As rotas têm `maxDuration` de 60 segundos. |
-| Neon / PostgreSQL                      | Estado persistente, consultas parametrizadas e transações com bloqueio de linha para políticas concorrentes. | Banco indisponível impede autorizações. Muitas chamadas abusivas também podem consumir capacidade do banco.                      |
-| Vercel Blob **privado**                | Armazena ciphertext; upload direto evita encaminhar arquivos pelo corpo da API Next.js.                      | Exclusão física é assíncrona; tokens, consistência operacional e limites do provedor precisam ser considerados.                  |
-| Clerk                                  | Cadastro e sessão dos criadores, sem construir um sistema próprio de identidade.                             | Serviço externo com DNS, certificados, disponibilidade e processamento de dados próprios.                                        |
-| `@serenity-kit/opaque` 1.1.0           | Implementação OPAQUE em Rust/WASM, fixada no lockfile, para autenticação sem transmitir a senha do artefato. | Integração criptográfica sensível, custo de memória e necessidade de administrar segredos do servidor.                           |
-| Web Crypto e Web Worker                | AES-GCM e HKDF nativos do navegador; trabalho criptográfico fora da thread da interface.                     | Worker não é um enclave seguro. Memória, navegador e JavaScript entregue continuam na fronteira de confiança.                    |
-| Zod                                    | Validação estrita das entradas e rejeição de campos inesperados.                                             | Validação de formato não prova correção criptográfica nem torna confiável um cliente modificado.                                 |
-| Vitest, PGlite e PostgreSQL real na CI | Testes rápidos e verificação de transações e concorrência com conexões independentes.                        | Testes não cobrem todos os navegadores, provedores ou cenários adversariais.                                                     |
+| Technology                                | Role and reason for choosing it                                                                                         | Trade-off or limitation                                                                                           |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Next.js 16, React 19, and TypeScript      | Interface and API in one project, with direct Vercel integration.                                                       | Dependency on the framework, security updates, and correct cache, header, and runtime configuration.              |
+| Vercel Functions, Node.js runtime         | Backend without a dedicated server; receives proofs and streams authorized objects.                                     | Execution limits, platform dependency, and request/transfer consumption. Routes have a 60-second `maxDuration`.   |
+| Neon / PostgreSQL                         | Persistent state, parameterized queries, and transactions with row locks for concurrent policy enforcement.             | Database downtime blocks authorizations. Abusive traffic can still consume database capacity.                     |
+| **Private** Vercel Blob                   | Stores ciphertext; direct uploads avoid routing files through the Next.js API request body.                             | Physical deletion is asynchronous; tokens, operational consistency, and provider limits require attention.        |
+| Clerk                                     | Creator sign-up and sessions without building an identity system.                                                       | External service with its own DNS, certificates, availability, and data processing.                               |
+| `@serenity-kit/opaque` 1.1.0              | Rust/WASM OPAQUE implementation, pinned in the lockfile, for authentication without transmitting the artifact password. | Sensitive cryptographic integration, memory cost, and server-secret management.                                   |
+| Web Crypto and Web Worker                 | Browser-native AES-GCM and HKDF; cryptographic work off the interface thread.                                           | A Worker is not a secure enclave. Memory, the browser, and delivered JavaScript remain within the trust boundary. |
+| Zod                                       | Strict input validation and rejection of unexpected fields.                                                             | Format validation does not prove cryptographic correctness or make a modified client trustworthy.                 |
+| Vitest, PGlite, and real PostgreSQL in CI | Fast tests plus transaction and concurrency checks with independent connections.                                        | Tests do not cover every browser, provider, or adversarial scenario.                                              |
 
-Não há Redis, broker externo ou serviço de filas adicional. Handshakes, limites de requisição e fila de exclusão ficam no PostgreSQL, reduzindo componentes operacionais. As garantias de concorrência dependem desse estado compartilhado, sem contadores locais em memória de uma Function.
+There is no Redis, external broker, or additional queue service. Handshakes, rate limits, and the deletion queue live in PostgreSQL, reducing operational components. Concurrency guarantees depend on this shared state, without counters held in a single Function's memory.
 
-O backend é transiente na execução das requisições, mas banco e storage são persistentes até a limpeza. O produto não depende de um processo permanentemente ligado para manter um temporizador por artefato.
+The backend is transient while handling requests, but the database and storage persist until cleanup. The product does not depend on a continuously running process to maintain a timer for each artifact.
 
-## Senha, OPAQUE e chaves de conteúdo
+## Passwords, OPAQUE, and content keys
 
-### Por que não enviar um hash estático da senha?
+### Why not send a static password hash?
 
-Se a API aceitasse sempre `hash(salt + senha)` como credencial, quem obtivesse esse valor poderia potencialmente reapresentá-lo, mesmo sem descobrir a senha original. Um verificador estático também oferece uma forma de conferir palpites offline. Salt dificulta tabelas pré-calculadas; não impede testar uma lista de senhas. MD5 e SHA-256 isolados são rápidos demais para proteger senhas humanas contra esse tipo de tentativa.
+If the API always accepted `hash(salt + password)` as a credential, someone who obtained that value could potentially replay it without discovering the original password. A static verifier also provides a way to check guesses offline. A salt makes precomputed tables harder to use; it does not prevent testing a password list. MD5 and SHA-256 alone are too fast to protect human passwords against such attempts.
 
-OPAQUE é um protocolo de autenticação por senha com troca de mensagens e prova vinculada à sessão. O navegador processa a senha, o servidor participa com material secreto próprio e a API exige uma prova final válida antes de buscar o conteúdo cifrado. A senha do artefato não é enviada à API, nem durante sua criação. Os schemas não aceitam um campo de senha; isso não dispensa manter logs e instrumentação livres de dados sensíveis.
+OPAQUE is a password-authentication protocol with a message exchange and session-bound proof. The browser processes the password, the server participates using its own secret material, and the API requires a valid final proof before fetching ciphertext. The artifact password is never sent to the API, including during creation. Schemas reject a password field; this does not remove the need to keep logs and instrumentation free of sensitive data.
 
-O identificador criptográfico do cliente é o UUID interno e imutável do artefato. A identidade do servidor é a origem canônica em `APP_ORIGIN`. Username e ID curto apenas localizam o registro. Alterar a origem canônica ou o material OPAQUE sem uma estratégia de migração pode impedir a abertura de artefatos existentes.
+The client's cryptographic identifier is the artifact's immutable internal UUID. The server identity is the canonical origin in `APP_ORIGIN`. Usernames and short IDs only locate the record. Changing the canonical origin or OPAQUE material without a migration strategy can prevent existing artifacts from being opened.
 
-### Segredos e responsabilidades
+### Secrets and responsibilities
 
-| Material                    | Onde é usado                                   | O que protege e o que não protege                                                                                                                                        |
-| --------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Senha do artefato           | Navegador do criador e do destinatário         | Permite autenticação e recuperação da chave. Senha fraca continua sujeita a palpites.                                                                                    |
-| `OPAQUE_SERVER_SETUP`       | Backend, fora das tabelas de artefatos         | Contém material OPRF e chave privada de autenticação do servidor. É necessário para participar do protocolo e deve ser tratado como segredo crítico.                     |
-| Registro OPAQUE             | PostgreSQL, por artefato                       | Permite autenticação junto do setup. Não é senha em claro, mas também não é um registro inofensivo se os segredos do servidor vazarem.                                   |
-| `exportKey` do cliente      | Worker do navegador                            | Origina a chave que envolve a chave do conteúdo; não é enviada à API.                                                                                                    |
-| `sessionKey` OPAQUE         | Disponível aos participantes do protocolo      | **Não cifra nem envolve a chave do conteúdo**, pois o servidor também a conhece.                                                                                         |
-| Chave de conteúdo, ou DEK   | Aleatória, por artefato; em claro no navegador | Cifra mensagem/arquivo e seus metadados originais. No banco fica somente seu envelope cifrado.                                                                           |
-| `HANDSHAKE_SEAL_KEY`        | Backend                                        | Cifra o estado temporário do protocolo no banco, vinculado ao artefato. Não substitui a proteção do setup OPAQUE.                                                        |
-| Credencial de gerenciamento | Entregue ao criador; hash SHA-256 no banco     | Autoriza operações de gerenciamento, incluindo revogação. É um segredo aleatório de 256 bits, independente da senha. Seu hash não é um verificador da senha do artefato. |
+| Material                    | Where it is used                                      | What it protects and its limits                                                                                                                                   |
+| --------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Artifact password           | Creator's and recipient's browsers                    | Enables authentication and key recovery. Weak passwords remain vulnerable to guessing.                                                                            |
+| `OPAQUE_SERVER_SETUP`       | Backend, outside artifact tables                      | Contains OPRF material and the server's private authentication key. Required to participate in the protocol and must be treated as a critical secret.             |
+| OPAQUE registration record  | PostgreSQL, per artifact                              | Enables authentication together with the setup. It is not a plaintext password, but is not harmless if server secrets leak.                                       |
+| Client `exportKey`          | Browser Worker                                        | Provides the material for wrapping the content key; never sent to the API.                                                                                        |
+| OPAQUE `sessionKey`         | Available to protocol participants                    | **Does not encrypt or wrap the content key**, because the server also knows it.                                                                                   |
+| Data encryption key, or DEK | Random, per artifact; plaintext in the browser        | Encrypts the message/file and original metadata. Only its encrypted envelope is stored in the database.                                                           |
+| `HANDSHAKE_SEAL_KEY`        | Backend                                               | Encrypts temporary protocol state in the database, bound to the artifact. Does not replace protection of the OPAQUE setup.                                        |
+| Management credential       | Returned to the creator; SHA-256 hash in the database | Authorizes management operations, including revocation. It is a random 256-bit secret independent of the password. Its hash is not an artifact-password verifier. |
 
-**Limite fundamental:** quem obtiver o material OPRF do servidor e um registro correspondente pode executar tentativas de senha offline. A posse da chave privada de autenticação do servidor não é necessária para esse ataque de dicionário com OPRF e registro. O operador possui acesso técnico a esses materiais. OPAQUE aumenta a proteção de um vazamento isolado do banco, mas não garante resistência a um comprometimento completo da aplicação nem a um operador malicioso.
+**Fundamental limit:** anyone who obtains the server's OPRF material and a corresponding registration record can make offline password guesses. The server's private authentication key is not required for this dictionary attack with OPRF material and a record. The operator has technical access to these materials. OPAQUE improves protection against an isolated database leak, but does not guarantee resistance to complete application compromise or a malicious operator.
 
-OPAQUE não cifra sozinho o arquivo. Ele autentica o destinatário e permite ao cliente recuperar material estável para abrir o envelope da chave, conforme o fluxo abaixo.
+OPAQUE does not itself encrypt the file. It authenticates the recipient and lets the client recover stable material to open the key envelope, as described below.
 
-### Formato criptográfico implementado
+### Implemented cryptographic format
 
-1. O navegador executa o registro OPAQUE e recupera a `exportKey`. O perfil `memory-constrained` da biblioteca usa Argon2id com 64 MiB de memória, 3 iterações e paralelismo 4.
-2. Uma DEK aleatória de 32 bytes cifra o payload com AES-256-GCM e nonce aleatório de 12 bytes. O payload inclui um tamanho de cabeçalho de 4 bytes, um JSON com tipo, nome e MIME e os bytes do conteúdo. Nome e MIME originais também ficam cifrados.
-3. HKDF-SHA-256 deriva uma chave de envolvimento a partir da codificação UTF-8 da `exportKey`, com o UUID como salt e `artefatos:key-wrap:v1` como contexto.
-4. Outra operação AES-GCM, com nonce independente, cifra a DEK. O banco guarda versão, nonce e ciphertext desse envelope, além do registro OPAQUE.
-5. O ciphertext do payload contém um byte de versão, o nonce e os bytes cifrados com a tag GCM. O dado adicional autenticado, tanto para conteúdo quanto para envelope, é `artefatos:payload:v1:<UUID>`.
+1. The browser performs OPAQUE registration and recovers the `exportKey`. The library's `memory-constrained` profile uses Argon2id with 64 MiB of memory, 3 iterations, and parallelism 4.
+2. A random 32-byte DEK encrypts the payload using AES-256-GCM with a random 12-byte nonce. The payload includes a 4-byte header length, a JSON header with kind, name, and MIME type, and the content bytes. The original name and MIME type are also encrypted.
+3. HKDF-SHA-256 derives a wrapping key from the UTF-8 encoding of the `exportKey`, using the UUID as salt and `artefatos:key-wrap:v1` as context.
+4. A separate AES-GCM operation, with an independent nonce, encrypts the DEK. The database stores the version, nonce, and ciphertext of this envelope, alongside the OPAQUE record.
+5. The payload ciphertext contains a version byte, the nonce, and the encrypted bytes with their GCM tag. The additional authenticated data for both content and envelope is `artefatos:payload:v1:<UUID>`.
 
-Os prefixos internos `artefatos:*` são parte do protocolo existente, apesar do nome público Efemero. Não devem ser renomeados como uma alteração cosmética: isso quebraria a compatibilidade criptográfica. O formato da aplicação está na versão 1.
+The internal `artefatos:*` prefixes belong to the existing protocol despite the public name Efemero. They must not be renamed as a cosmetic change: doing so would break cryptographic compatibility. The application format is version 1.
 
-GCM detecta alteração dos bytes sem a chave correta, e os contextos vinculam a operação ao artefato. Isso não comprova a identidade humana do remetente nem a segurança do arquivo recebido. Uma pessoa com a senha pode copiar e redistribuir o conteúdo.
+GCM detects byte tampering without the correct key, and the contexts bind the operation to the artifact. This does not prove the sender's human identity or the safety of a received file. Anyone with the password can copy and redistribute the content.
 
-## Fluxos de criação e abertura
+## Creation and retrieval flows
 
-### Criação
+### Creation
 
-1. O navegador valida a entrada e inicia o registro OPAQUE no Worker. Na modalidade de conta, a API valida a sessão e resolve o proprietário no servidor.
-2. `reserve` reserva UUID, endereço, prazo, orçamento de bytes e política. O backend retorna a resposta OPAQUE e a credencial de gerenciamento. O prazo começa nessa reserva, não ao fim do upload.
-3. O navegador finaliza o registro, cifra o payload e envolve a DEK. A senha, a DEK em claro e a `exportKey` permanecem no cliente.
-4. `upload` autoriza uma única emissão de token para o caminho reservado no Blob privado, com tamanho limitado, tipo `application/octet-stream`, sem sobrescrita e sem multipart. O token vence em até 15 minutos, limitado também pelo prazo do artefato.
-5. O navegador faz upload direto do ciphertext. `commit`, autorizado pela credencial de gerenciamento, entrega registro OPAQUE e envelope cifrado. O backend confere caminho, tamanho, tipo e storage privado antes de publicar.
+1. The browser validates the input and starts OPAQUE registration in the Worker. In account mode, the API verifies the session and resolves ownership on the server.
+2. `reserve` reserves the UUID, address, deadline, byte budget, and policy. The backend returns the OPAQUE response and management credential. The lifetime starts at reservation, not at upload completion.
+3. The browser completes registration, encrypts the payload, and wraps the DEK. The password, plaintext DEK, and `exportKey` remain on the client.
+4. `upload` authorizes a single token issuance for the reserved private Blob path, with a size limit, `application/octet-stream` type, no overwrite, and no multipart. The token expires within 15 minutes, also bounded by the artifact deadline.
+5. The browser uploads ciphertext directly. `commit`, authorized by the management credential, submits the OPAQUE record and encrypted envelope. The backend checks the path, size, type, and private storage before publication.
 
-Uma reserva abandonada não fica publicamente disponível. Publicar novamente, substituir um objeto ou reviver um artefato expirado/revogado não é uma operação suportada.
+An abandoned reservation is not publicly available. Republishing, replacing an object, or reviving an expired/revoked artifact is not supported.
 
-### Abertura e entrega
+### Retrieval and delivery
 
-1. Abrir a página não baixa o ciphertext. Para artefatos de conta, a interface envia um evento agregado de abertura, sem identificar o destinatário.
-2. Após o usuário informar a senha, o navegador inicia OPAQUE. `access/start` verifica estado, prazo e limites antes de devolver o desafio. O estado temporário do servidor fica cifrado no banco por até 120 segundos, ou menos se o artefato vencer antes.
-3. O navegador processa o desafio. Uma senha incorreta não produz uma prova válida; o cliente oficial envia uma prova inválida para concluir a tentativa. Abandonar a troca também é considerado na política de kill-switch.
-4. `access/finish` abre uma transação, bloqueia a linha do artefato, resolve tentativas vencidas e consome o handshake uma única vez. Só uma prova válida pode incrementar o contador de entregas.
-5. A autorização é confirmada no banco **antes** da leitura do Blob. O backend lê o objeto privado sem cache e transmite os bytes na resposta desse POST. O envelope da DEK vai em `X-Wrapped-Key`, e o UUID em `X-Artifact-Id`.
-6. O navegador recupera a chave e descriptografa localmente. Mensagens são exibidas como texto; arquivos são oferecidos como download binário, sem renderização de documentos ativos na origem do site.
+1. Opening the page does not download ciphertext. For account artifacts, the interface sends an aggregate page-open event without identifying the recipient.
+2. After the user enters the password, the browser starts OPAQUE. `access/start` checks state, deadline, and limits before returning a challenge. Temporary server state is encrypted in the database for up to 120 seconds, or less if the artifact expires sooner.
+3. The browser processes the challenge. An incorrect password does not produce a valid proof; the official client sends an invalid proof to conclude the attempt. Abandoning the exchange is also considered by the kill-switch policy.
+4. `access/finish` opens a transaction, locks the artifact row, settles expired attempts, and consumes the handshake once. Only a valid proof can increment the delivery counter.
+5. Authorization is committed to the database **before** the Blob read. The backend reads the private object without cache and streams the bytes in the POST response. The DEK envelope is sent in `X-Wrapped-Key`, and the UUID in `X-Artifact-Id`.
+6. The browser recovers the key and decrypts locally. Messages are displayed as text; files are offered as binary downloads, without rendering active documents on the site's origin.
 
-Não é fornecida uma URL GET assinada reutilizável para o destinatário contornar os contadores. A resposta usa `private, no-store` e `nosniff`. Esses headers orientam clientes e intermediários; não impedem um cliente autorizado de salvar bytes.
+Recipients do not receive a reusable signed GET URL that could bypass counters. The response uses `private, no-store` and `nosniff`. These headers instruct clients and intermediaries; they cannot stop an authorized client from saving bytes.
 
-Uma entrega autorizada pode consumir o limite mesmo que o storage, a rede ou a descriptografia falhem depois. Não há reembolso automático nem retomada do download. Autorizar primeiro evita que a mesma prova seja reutilizada para obter várias entregas.
+An authorized delivery can consume the limit even if storage, the network, or decryption later fails. There is no automatic refund or download resumption. Authorizing first prevents the same proof from being reused for multiple deliveries.
 
-Bloqueios de linha serializam provas concorrentes, último acesso, revogação e kill-switch. Uma transferência já autorizada pode continuar após uma revogação concorrente: a política impede **novas autorizações**, sem recolher bytes já liberados.
+Row locks serialize concurrent proofs, the final allowed access, revocation, and the kill-switch. An already authorized transfer may continue after concurrent revocation: the policy prevents **new authorizations**, without reclaiming bytes already released.
 
-## Expiração, kill-switch e remoção
+## Expiration, kill-switch, and removal
 
-### Estados
+### States
 
-| Estado      | Significado                                                                                     |
+| State       | Meaning                                                                                         |
 | ----------- | ----------------------------------------------------------------------------------------------- |
-| `pending`   | Reserva ainda não publicada; janela de publicação de até 15 minutos, limitada pelo prazo total. |
-| `ready`     | Publicado, sujeito às verificações de prazo e limites em cada autorização.                      |
-| `revoked`   | Revogado pelo proprietário ou pela credencial de gerenciamento.                                 |
-| `expired`   | Prazo encerrado ou reserva abandonada processada pela limpeza.                                  |
-| `exhausted` | Limite de entregas autorizadas atingido.                                                        |
-| `destroyed` | Limite de falhas do kill-switch atingido.                                                       |
+| `pending`   | Unpublished reservation; publication window of up to 15 minutes, bounded by the total lifetime. |
+| `ready`     | Published, subject to deadline and limit checks on every authorization.                         |
+| `revoked`   | Revoked by the owner or management credential.                                                  |
+| `expired`   | Lifetime elapsed or abandoned reservation processed by cleanup.                                 |
+| `exhausted` | Authorized-delivery limit reached.                                                              |
+| `destroyed` | Kill-switch failure limit reached.                                                              |
 
-`purged_at` registra separadamente a conclusão da exclusão do objeto. Um estado terminal não significa que todas as cópias físicas desapareceram naquele instante. O histórico pode apresentar o estado efetivo de expiração antes de a limpeza persistir essa transição.
+`purged_at` separately records completion of object deletion. A terminal state does not mean every physical copy disappeared at that instant. History may show an effective expired state before cleanup persists the transition.
 
-O prazo é checado no início e na finalização da autenticação, usando o relógio do servidor. Portanto, acesso vencido é recusado mesmo se o cron não executar. No caso da expiração por tempo, a remoção do registro OPAQUE e do envelope do banco ocorre quando a limpeza processa o artefato. Revogação, último acesso e kill-switch removem esses materiais na própria transação que encerra a disponibilidade.
+The deadline is checked at both authentication start and completion, using the server clock. Expired access is therefore denied even if cron does not run. For time-based expiration, the OPAQUE record and key envelope are removed from the database when cleanup processes the artifact. Revocation, final access, and the kill-switch remove these materials in the transaction that ends availability.
 
-### Kill-switch: proteção com risco de negação de serviço
+### Kill-switch: protection with a denial-of-service risk
 
-Na modalidade de conta, o criador pode definir de 1 a 100 falhas acumuladas. A opção é desativada por padrão e fica imutável após a criação. Uma autenticação correta não zera falhas anteriores.
+In account mode, the creator can set a limit of 1 to 100 accumulated failures. The option is disabled by default and immutable after creation. A successful authentication does not reset prior failures.
 
-Uma prova inválida consome o handshake e conta uma falha. Para impedir que um cliente simplesmente omita a resposta após descobrir que errou, handshakes abandonados também contam ao vencer. A resolução ocorre no próximo início/finalização de acesso ou pela limpeza; não existe um temporizador dedicado executando exatamente no segundo 120.
+An invalid proof consumes the handshake and counts as a failure. To prevent a client from simply withholding its response after discovering a wrong guess, abandoned handshakes also count after expiration. They are settled at the next access start/completion or by cleanup; there is no dedicated timer firing exactly at second 120.
 
-O número de desafios pendentes é limitado pelo orçamento restante de falhas. Se todos os espaços estiverem ocupados, novos inícios recebem recusa temporária, em vez de destruir o artefato apenas por iniciar desafios adicionais.
+Pending challenges are bounded by the remaining failure budget. When every slot is occupied, new starts receive a temporary rejection instead of destroying the artifact merely because additional challenges were requested.
 
-**Qualquer pessoa que conheça o link pode provocar falhas ou abandonar desafios deliberadamente e destruir o artefato.** Fechar a página, uma conexão lenta ou uma interrupção de rede também podem consumir tentativas, inclusive quando a pessoa pretendia usar a senha correta. Esse é um compromisso inerente ao recurso, não uma forma de distinguir atacantes de destinatários legítimos.
+**Anyone who knows the link can deliberately cause failures or abandon challenges and destroy the artifact.** Closing the page, a slow connection, or a network interruption can also consume attempts, even when the person intended to use the correct password. This is an inherent trade-off, not a way to distinguish attackers from legitimate recipients.
 
-### Limpeza física e reconciliação
+### Physical cleanup and reconciliation
 
-O cron da Vercel chama `/api/cron/cleanup` diariamente, com `CRON_SECRET`. A fila persistida no PostgreSQL usa leases e `FOR UPDATE SKIP LOCKED` para coordenar execuções e permitir repetição após falhas.
+Vercel cron calls `/api/cron/cleanup` daily using `CRON_SECRET`. The PostgreSQL-backed queue uses leases and `FOR UPDATE SKIP LOCKED` to coordinate executions and support retries after failures.
 
-A exclusão respeita uma janela de segurança: a elegibilidade considera o instante atual, 90 segundos após a última entrega autorizada e 90 segundos após a validade do token de upload, conforme aplicável. Isso evita interferir em transferências autorizadas e reduz corridas com uploads ainda válidos.
+Deletion respects a safety window: eligibility considers the current time, 90 seconds after the latest authorized delivery, and 90 seconds after upload-token validity, as applicable. This avoids interfering with authorized transfers and reduces races with still-valid uploads.
 
-Uma chamada drena lotes de 20 trabalhos, com orçamento de 45 segundos e até 500 lotes, dentro da Function configurada para 60 segundos. Falhas adiam a elegibilidade em 5 minutos; **isso não garante nova execução em 5 minutos**, porque o agendador é diário. A resposta indica `limited` quando o orçamento se esgota.
+An invocation drains batches of 20 jobs, with a 45-second budget and up to 500 batches, within the Function's 60-second configuration. Failures defer eligibility by 5 minutes; **this does not guarantee another execution in 5 minutes**, because the scheduler runs daily. The response reports `limited` when the work budget is exhausted.
 
-Há também inventário paginado do Blob, com cursor persistido, para remover objetos que reapareçam após um upload iniciado antes do vencimento do token. A reconciliação pode exigir várias execuções para percorrer o storage.
+A paginated Blob inventory with a persisted cursor also removes objects that reappear after an upload started before token expiration. Reconciliation may require several invocations to scan storage.
 
-Backlog, indisponibilidade, falha do agendador ou duração excedida podem atrasar a exclusão física além do próximo dia. Não há SLA de remoção em 24 horas nem comprovação de apagamento de backups, caches ou réplicas internas dos provedores. A expiração do acesso não depende dessa exclusão.
+Backlogs, outages, scheduler failures, or execution timeouts can delay physical deletion beyond the next day. There is no 24-hour deletion SLA or proof of erasure from provider backups, caches, or internal replicas. Access expiration does not depend on that deletion.
 
-## Privacidade, estatísticas e retenção
+## Privacy, statistics, and retention
 
-### O que cada parte conhece
+### What each party knows
 
-| Local                               | Dados presentes na operação normal                                                                                                                                          |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Navegador                           | Senha do artefato, conteúdo, nome e MIME originais, chaves temporárias; o destinatário pode guardar a cópia.                                                                |
-| PostgreSQL                          | Conta e ID Clerk, username, URL, UUID, datas, política, tamanho declarado, estado, contadores, caminho de storage, registro OPAQUE e envelope cifrado enquanto necessários. |
-| Blob privado                        | Payload cifrado, tamanho e metadados operacionais do objeto; nome original e MIME estão dentro do payload cifrado.                                                          |
-| Clerk                               | Dados de identidade, sessão e mecanismos de proteção de acesso conforme configuração e políticas do serviço.                                                                |
-| Infraestrutura de rede e provedores | Podem observar IPs, hostname, URLs acessadas, horários, tamanhos e logs operacionais conforme sua posição e suas políticas.                                                 |
+| Location                             | Data present during normal operation                                                                                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Browser                              | Artifact password, content, original name and MIME type, temporary keys; recipients can keep their copy.                                                        |
+| PostgreSQL                           | Account and Clerk ID, username, URL, UUID, dates, policy, declared size, state, counters, storage path, OPAQUE record, and encrypted key envelope while needed. |
+| Private Blob                         | Encrypted payload, size, and operational object metadata; original name and MIME type are inside the encrypted payload.                                         |
+| Clerk                                | Identity, session, and access-protection data according to the service's configuration and policies.                                                            |
+| Network infrastructure and providers | May observe IP addresses, hostnames, accessed URLs, timestamps, sizes, and operational logs according to their position and policies.                           |
 
-Não há padding para ocultar o tamanho. O tamanho do ciphertext permite inferir aproximadamente o tamanho do conteúdo. Datas, frequência de acesso e usernames também podem revelar relações entre usuários e artefatos.
+There is no padding to hide size. Ciphertext size reveals the approximate content size. Dates, access frequency, and usernames may also reveal relationships between users and artifacts.
 
-“Anônimo” significa que criar e receber não exige conta. Não significa anonimato de rede, impossibilidade de correlação ou ausência de logs nos provedores. Recomenda-se compartilhar a senha por um canal separado do link e evitar informações sensíveis no username ou no ID personalizado, que são públicos.
+“Anonymous” means creation and retrieval do not require an account. It does not mean network anonymity, inability to correlate activity, or absence of provider logs. Share passwords through a channel separate from the link and avoid sensitive information in usernames or custom IDs, which are public.
 
-O código não adiciona analytics de destinatários nem registra intencionalmente senha, conteúdo, mensagens OPAQUE, credenciais ou erros brutos de provedores nos handlers. A telemetria opcional do SDK Clerk está desativada. Isso não desativa os mecanismos de proteção do Clerk nem constitui uma garantia sobre todo o logging da infraestrutura.
+The code does not add recipient analytics or intentionally log passwords, content, OPAQUE messages, credentials, or raw provider errors in handlers. Optional Clerk SDK telemetry is disabled. This does not disable Clerk's protection mechanisms or guarantee the behavior of all infrastructure logging.
 
-### O que os contadores medem
+### What the counters measure
 
-O painel lista metadados dos artefatos da conta, com paginação, estado e remoção permanente. Não guarda uma cópia em claro do conteúdo para o proprietário.
+The dashboard lists account-artifact metadata with pagination, state, and permanent removal. It does not keep a plaintext content copy for the owner.
 
-- **Aberturas:** eventos agregados enviados pela interface do destinatário. São uma estimativa; recargas, bots, bloqueadores, falhas de rede e chamadas artificiais podem alterar o número. Não são pessoas únicas nem uma trilha de destinatários.
-- **Entregas autorizadas:** provas OPAQUE aceitas que consumiram uma autorização. Não comprovam download concluído, descriptografia bem-sucedida ou leitura humana.
-- **Falhas:** tentativas contabilizadas pela política de kill-switch, incluindo desafios abandonados resolvidos após o vencimento.
+- **Page opens:** aggregate events sent by the recipient interface. These are estimates; reloads, bots, blockers, network failures, and artificial requests can affect the count. They are not unique people or a recipient audit trail.
+- **Authorized deliveries:** accepted OPAQUE proofs that consumed an authorization. They do not prove download completion, successful decryption, or human reading.
+- **Failures:** attempts counted by the kill-switch policy, including abandoned challenges settled after expiration.
 
-Não existe uma medida confiável de “número de descriptografias” em um cliente sob controle do destinatário. Uma confirmação enviada pelo navegador poderia ser omitida ou fabricada. Por isso o produto não apresenta esse número como fato verificável.
+There is no reliable measure of the “number of decryptions” on a client controlled by the recipient. A browser acknowledgment could be omitted or fabricated. The product therefore does not present that number as a verifiable fact.
 
-### O que permanece depois da exclusão
+### What remains after deletion
 
-Após a remoção do objeto, a limpeza apaga do registro seu URL de storage, hash de gerenciamento e materiais do protocolo. O histórico da conta deixa de listar artefatos purgados há mais de 30 dias. Uma limpeza posterior remove desses registros o vínculo direto `owner_id`, zera contadores e reduz outros campos associados ao histórico.
+After object removal, cleanup clears its storage URL, management hash, and protocol material from the record. Account history stops listing artifacts purged more than 30 days ago. A later cleanup removes their direct `owner_id` association, resets counters, and reduces other history-related fields.
 
-**A linha do artefato não é apagada.** Permanecem registros residuais, ou tombstones, para impedir reutilização de URLs. Eles ainda incluem endereço, UUID, namespace, slug, estado, timestamps e campos operacionais. O namespace de um artefato de conta continua sendo o username público: remover `owner_id` não torna esse registro anônimo. Os tombstones anônimos também não passam por uma exclusão geral de todos os seus metadados.
+**The artifact row is not deleted.** Residual records, or tombstones, prevent URL reuse. They still include the address, UUID, namespace, slug, state, timestamps, and operational fields. An account artifact's namespace remains the public username: removing `owner_id` does not make the record anonymous. Anonymous tombstones likewise do not undergo a general deletion of all metadata.
 
-As contas e seus usernames permanecem no banco; não há fluxo completo de exclusão de conta ou sincronização de exclusão a partir do Clerk implementado. Os tombstones crescem sem um prazo final de remoção. A retenção de 30 dias é uma regra do histórico após o purge, não uma promessa de apagar todos os dados da pessoa em 30 dias.
+Accounts and usernames remain in the database; no complete account-deletion flow or deletion synchronization from Clerk is implemented. Tombstones grow without a final deletion deadline. The 30-day retention rule concerns history after purge, not erasure of all personal data within 30 days.
 
-As chaves dos limitadores são HMACs de identidade de rede, escopo e janela temporal, sem armazenar o IP bruto nessa tabela. As linhas vencem logicamente ao terminar a janela e são removidas pela limpeza; podem permanecer fisicamente por mais tempo se ela falhar. HMAC não torna IPs dados impossíveis de correlacionar para quem controla o segredo.
+Rate-limit keys are HMACs of network identity, scope, and time bucket, without raw IP storage in that table. Rows expire logically at the end of the window and are removed by cleanup; they may remain physically longer if cleanup fails. HMAC does not make IP addresses impossible to correlate for someone who controls the secret.
 
-Backups e registros dos provedores têm ciclos próprios. Restaurar um banco antigo pode restaurar metadados ou permissões antigas; recuperação operacional exige reavaliar prazos, revogações e objetos. Não há um procedimento automatizado completo de recuperação de desastre com essas garantias.
+Provider backups and records have separate lifecycles. Restoring an old database can restore old metadata or permissions; operational recovery requires reassessing deadlines, revocations, and objects. There is no complete automated disaster-recovery procedure with these guarantees.
 
-## Limites e proteção contra abuso
+## Limits and abuse prevention
 
-### Limites da aplicação
+### Application limits
 
-| Recurso                                        | Limite atual                                                                |
-| ---------------------------------------------- | --------------------------------------------------------------------------- |
-| Arquivo anônimo                                | 2 MiB de conteúdo no cliente oficial.                                       |
-| Arquivo criado na área de conta                | 5 MiB de conteúdo no cliente oficial.                                       |
-| Mensagem                                       | 256 KiB.                                                                    |
-| Prazo                                          | De 1 minuto a 7 dias, obrigatório, contado desde a reserva.                 |
-| Entregas autorizadas                           | Opcional, de 1 a 100; sem limite de contagem continua havendo prazo.        |
-| Kill-switch                                    | Opcional, de 1 a 100 falhas acumuladas, somente para artefatos de conta.    |
-| Senha no cliente oficial                       | De 12 a 256 caracteres; prefira senha gerada ou frase longa e imprevisível. |
-| Artefatos ainda não purgados por conta         | 50, incluindo reservas e itens aguardando exclusão.                         |
-| Orçamento global de objetos ainda não purgados | 1 GiB de tamanhos cifrados declarados, reservado atomicamente no banco.     |
-| Corpo JSON nas rotas de controle               | Até 32 KiB; arquivos são enviados diretamente ao Blob.                      |
-| Handshake de abertura                          | Até 120 segundos, limitado pelo prazo do artefato.                          |
+| Resource                                 | Current limit                                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| Anonymous file                           | 2 MiB of content in the official client.                                               |
+| File created in the account area         | 5 MiB of content in the official client.                                               |
+| Message                                  | 256 KiB.                                                                               |
+| Lifetime                                 | 1 minute to 7 days, mandatory, counted from reservation.                               |
+| Authorized deliveries                    | Optional, 1 to 100; an unlimited delivery count still has a deadline.                  |
+| Kill-switch                              | Optional, 1 to 100 accumulated failures, account artifacts only.                       |
+| Password in the official client          | 12 to 256 characters; prefer a generated password or a long, unpredictable passphrase. |
+| Artifacts not yet purged per account     | 50, including reservations and items awaiting deletion.                                |
+| Global budget for objects not yet purged | 1 GiB of declared ciphertext sizes, reserved atomically in the database.               |
+| JSON body on control routes              | Up to 32 KiB; files upload directly to Blob.                                           |
+| Retrieval handshake                      | Up to 120 seconds, bounded by the artifact deadline.                                   |
 
-MiB corresponde a `1024 × 1024` bytes. A interface usa o rótulo MB; os limites do código são binários. A API admite uma margem de até 4 KiB no orçamento de ciphertext para o cabeçalho e os bytes adicionais do formato cifrado. O envelope da DEK é armazenado separadamente no banco. Como não vê o conteúdo em claro, ela limita os bytes cifrados e não consegue verificar exatamente o tamanho original ou o tipo de conteúdo de um cliente modificado. A restrição de tamanho de mensagem também é aplicada no cliente oficial.
+MiB means `1024 × 1024` bytes. The interface uses the MB label; code limits are binary. The API allows up to 4 KiB of ciphertext overhead for the header and additional encrypted-format bytes. The DEK envelope is stored separately in the database. Since the API cannot see plaintext, it limits ciphertext bytes and cannot verify the exact original size or content kind from a modified client. The message-size restriction is also enforced by the official client.
 
-O mesmo vale para a qualidade e o tamanho da senha: como a API não recebe a senha, não pode comprovar sua entropia ou impor a validação textual do cliente. Um cliente modificado pode escolher uma senha fraca. Não há uma política criptográfica que transforme essa escolha em uma senha forte.
+The same applies to password quality and length: since the API does not receive the password, it cannot prove its entropy or enforce the client's textual validation. A modified client can choose a weak password. No cryptographic policy transforms that choice into a strong password.
 
-O leitor mantém compatibilidade com ciphertexts antigos de até 25 MiB mais a margem de formato. Isso não permite novos uploads de 25 MiB; novos artefatos obedecem aos limites de 2/5 MiB.
+The reader retains compatibility with older ciphertexts of up to 25 MiB plus format overhead. This does not allow new 25 MiB uploads; new artifacts follow the 2/5 MiB limits.
 
-### Limites de requisição
+### Rate limits
 
-São janelas fixas com atualização atômica em PostgreSQL. “Por rede” significa a identidade derivada do header de encaminhamento da Vercel; fora da Vercel, as requisições compartilham uma identidade local conservadora, sem confiar em headers de IP arbitrários.
+Fixed windows use atomic PostgreSQL updates. “Per network” means the identity derived from Vercel's forwarding header; outside Vercel, requests share a conservative local identity rather than trusting arbitrary IP headers.
 
-| Operação                  | Por rede              | Outros limites                                                 |
-| ------------------------- | --------------------- | -------------------------------------------------------------- |
-| Reservar artefato         | 5 por hora            | 100 por hora no serviço.                                       |
-| Emitir token de upload    | 20 por hora           | Regras do token e da reserva.                                  |
-| Publicar                  | 30 por hora           | Credencial de gerenciamento e estado da reserva.               |
-| Iniciar abertura          | 30 a cada 15 minutos  | 15 por artefato a cada 15 minutos; 600 por minuto no serviço.  |
-| Finalizar abertura        | 60 a cada 15 minutos  | Handshake de uso único e política do artefato.                 |
-| Contar abertura de página | 120 a cada 15 minutos | 120 por artefato a cada 15 minutos; 600 por minuto no serviço. |
-| Revogar                   | 30 por hora           | Credencial ou sessão do proprietário.                          |
-| Definir username          | 10 por hora           | Uma definição por conta, sem atualização.                      |
+| Operation          | Per network        | Other limits                                                  |
+| ------------------ | ------------------ | ------------------------------------------------------------- |
+| Reserve artifact   | 5 per hour         | 100 per hour service-wide.                                    |
+| Issue upload token | 20 per hour        | Token and reservation rules.                                  |
+| Publish            | 30 per hour        | Management credential and reservation state.                  |
+| Start retrieval    | 30 per 15 minutes  | 15 per artifact per 15 minutes; 600 per minute service-wide.  |
+| Complete retrieval | 60 per 15 minutes  | Single-use handshake and artifact policy.                     |
+| Count page open    | 120 per 15 minutes | 120 per artifact per 15 minutes; 600 per minute service-wide. |
+| Revoke             | 30 per hour        | Credential or owner session.                                  |
+| Set username       | 10 per hour        | One definition per account, no updates.                       |
 
-As cotas de rede são compartilhadas por pessoas atrás de NAT e não somem por estar autenticado. Algumas verificações ocorrem antes da validação completa; requisições inválidas podem consumir cota. Ataques distribuídos, limites globais e contenção no banco ainda podem impedir uso legítimo. Esses mecanismos reduzem abuso, mas não garantem resistência a DDoS nem um teto de cobrança.
+Network quotas are shared by people behind NAT and also apply to authenticated users. Some checks happen before full validation; invalid requests can consume quota. Distributed attacks, global limits, and database contention can still deny legitimate use. These mechanisms reduce abuse but do not guarantee DDoS resistance or a spending cap.
 
-O orçamento de 1 GiB limita reservas de objetos, não transferência, armazenamento total do banco, tombstones, operações de API ou todos os custos dos provedores. Os valores são decisões deste projeto, não uma reprodução das cotas comerciais de cada plano.
+The 1 GiB budget limits object reservations, not transfer, total database storage, tombstones, API operations, or all provider costs. These values are project decisions, not a reproduction of each provider's commercial plan quotas.
 
-## Riscos e limites de segurança
+## Security risks and limitations
 
-Os cenários abaixo descrevem compromissos e modos de falha do sistema. Não devem ser interpretados como um relatório de vulnerabilidades exploradas ou como uma auditoria concluída.
+The scenarios below describe system trade-offs and failure modes. They should not be read as a report of exploited vulnerabilities or a completed audit.
 
-| Cenário                                         | Proteção existente                                                               | Risco que permanece                                                                                                                                           |
-| ----------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pessoa conhece o link, sem senha                | OPAQUE antes da entrega, Blob privado e limites de tentativa.                    | Palpites online, enumeração de endereços e negação de serviço. URLs não são credenciais secretas e a existência de um artefato não é totalmente ocultada.     |
-| Vazamento isolado do banco ou storage           | Conteúdo e DEK cifrados; setup OPAQUE separado das tabelas.                      | Metadados vazam. A proteção deixa de ser a mesma se o atacante também obtiver os segredos do backend.                                                         |
-| Vazamento de material OPRF e registros          | Custo de derivação Argon2id e senhas fortes.                                     | Ataques de dicionário offline não obedecem a rate limit ou kill-switch. “Hash não reversível” não significa “senha impossível de descobrir”.                  |
-| Operador, deploy ou dependência maliciosa       | CSP, dependências fixadas e separação de scripts reduzem superfícies acidentais. | Quem altera o JavaScript entregue pode capturar senha e plaintext antes da criptografia. O operador também tem capacidade técnica para testar senhas offline. |
-| Navegador, extensão ou dispositivo comprometido | Worker, uso de Web Crypto e limpeza de alguns buffers.                           | Captura de tela, clipboard, memória, extensões, malware, swap e strings gerenciadas por garbage collection. Não há apagamento seguro garantido no navegador.  |
-| Replay ou corrida de último acesso              | Handshake de uso único, transação e bloqueio da linha.                           | A transferência já autorizada pode continuar; falhas posteriores podem consumir a última liberação.                                                           |
-| Kill-switch deliberadamente provocado           | Limites de requisição e orçamento de desafios pendentes.                         | Quem conhece a URL pode causar destruição sem saber a senha. Rede instável também pode consumir tentativas.                                                   |
-| Cron atrasado ou storage indisponível           | Prazo verificado na API e fila persistente com repetição e reconciliação.        | Ciphertext e alguns materiais podem permanecer armazenados depois de o acesso ser bloqueado. Backups dos provedores não são apagados pela fila.               |
-| Perda ou rotação incorreta de segredos          | Configuração separada e versão de setup registrada.                              | Pode tornar artefatos irrecuperáveis ou invalidar autenticações em andamento; não há keyring de migração implementado.                                        |
-| Arquivo perigoso enviado por alguém autorizado  | Sem preview ativo, MIME binário e nome recuperado apenas no cliente.             | Não há varredura antimalware do conteúdo cifrado. Abrir o arquivo em outro aplicativo pode ser perigoso.                                                      |
-| Comprometimento da conta Clerk                  | Controle de propriedade no backend; senha do artefato continua separada.         | O atacante pode consultar metadados e remover artefatos da conta. Administrar a conta não lhe dá automaticamente a senha de descriptografia.                  |
-| Indisponibilidade ou limites dos provedores     | Sem entrega quando a autorização não pode ser comprovada.                        | Dependência de Vercel, Neon, Blob, Clerk e DNS. Falhar fechado protege o acesso, mas não mantém o serviço disponível.                                         |
+| Scenario                                      | Existing protection                                                         | Remaining risk                                                                                                                                                     |
+| --------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Someone knows the link but not the password   | OPAQUE before delivery, private Blob, and attempt limits.                   | Online guessing, address enumeration, and denial of service. URLs are not secret credentials, and artifact existence is not completely hidden.                     |
+| Isolated database or storage leak             | Content and DEK encryption; OPAQUE setup separate from tables.              | Metadata leaks. Protection changes if the attacker also obtains backend secrets.                                                                                   |
+| OPRF material and registration records leak   | Argon2id derivation cost and strong passwords.                              | Offline dictionary attacks ignore rate limits and the kill-switch. A “non-reversible hash” does not mean a password cannot be discovered.                          |
+| Malicious operator, deployment, or dependency | CSP, pinned dependencies, and script separation reduce accidental exposure. | Anyone changing delivered JavaScript can capture passwords and plaintext before encryption. The operator also has the technical ability to test passwords offline. |
+| Compromised browser, extension, or device     | Worker, Web Crypto, and clearing of some buffers.                           | Screenshots, clipboard, memory, extensions, malware, swap, and garbage-collected strings. Secure browser-memory erasure is not guaranteed.                         |
+| Replay or final-access race                   | Single-use handshake, transaction, and row lock.                            | An authorized transfer may continue; later failures may consume the final release.                                                                                 |
+| Deliberately triggered kill-switch            | Rate limits and a pending-challenge budget.                                 | Anyone who knows the URL can cause destruction without the password. Unstable networks can also consume attempts.                                                  |
+| Delayed cron or unavailable storage           | API deadline checks and persistent queue with retries and reconciliation.   | Ciphertext and some material may remain stored after access is blocked. Provider backups are not erased by the queue.                                              |
+| Lost or incorrectly rotated secrets           | Separate configuration and recorded setup version.                          | Artifacts may become unrecoverable or ongoing authentication may fail; no migration keyring is implemented.                                                        |
+| Dangerous file from an authorized sender      | No active preview, binary MIME type, and name recovery only on the client.  | There is no malware scan of encrypted content. Opening the file in another application may be dangerous.                                                           |
+| Compromised Clerk account                     | Backend ownership checks; artifact password remains separate.               | The attacker can inspect metadata and remove account artifacts. Account administration does not automatically provide the decryption password.                     |
+| Provider outage or quota exhaustion           | No delivery when authorization cannot be proven.                            | Dependency on Vercel, Neon, Blob, Clerk, and DNS. Failing closed protects access but does not keep the service available.                                          |
 
-### Defesas da aplicação e seu alcance
+### Application defenses and their scope
 
-As mutações verificam a origem canônica e contexto cross-site, com tratamento próprio para callbacks autenticados do SDK de upload. Isso ajuda contra CSRF no navegador; `Origin` pode ser fabricado por um cliente fora do navegador e não substitui credencial, sessão ou prova OPAQUE.
+Mutations check the canonical origin and cross-site context, with separate handling for authenticated upload-SDK callbacks. This helps prevent browser CSRF; a non-browser client can fabricate `Origin`, so it does not replace a credential, session, or OPAQUE proof.
 
-A API usa schemas estritos, consultas SQL parametrizadas, escopo de proprietário resolvido no servidor e respostas de erro sem detalhes brutos dos provedores. Caminho de storage, conta e política não são aceitos como autoridade apenas porque vieram do cliente. O acesso ao Blob exige token de backend e a publicação confere o store privado.
+The API uses strict schemas, parameterized SQL, server-resolved ownership, and error responses without raw provider details. Storage paths, accounts, and policies are not trusted merely because a client supplied them. Blob access requires a backend token, and publication verifies private storage.
 
-A CSP usa nonce por resposta, `strict-dynamic`, suporte explícito a WASM e bloqueio de objetos e enquadramento. Produção não permite `unsafe-eval` para JavaScript; desenvolvimento tem permissões adicionais. Estilos inline continuam permitidos. Somente as páginas de conta recebem workers `blob:` e permissões adicionais do Clerk Protect, incluindo conexões HTTPS em portas não padrão. Essas permissões são uma dependência concreta da proteção do Clerk, não isolamento absoluto de scripts de terceiros.
+The CSP uses a per-response nonce, `strict-dynamic`, explicit WASM support, and object/embedding restrictions. Production does not allow JavaScript `unsafe-eval`; development has additional permissions. Inline styles remain allowed. Only account pages receive `blob:` workers and extra Clerk Protect permissions, including HTTPS connections on non-default ports. These permissions are a concrete dependency of Clerk's protection, not absolute isolation of third-party scripts.
 
-As páginas públicas não montam o `ClerkProvider`; o fluxo de conta carrega seus próprios serviços. CSP reduz algumas formas de injeção, mas não protege contra código malicioso autorizado por um deploy, nem prova ausência de XSS em toda mudança futura.
+Public pages do not mount `ClerkProvider`; the account flow loads its own services. CSP reduces some injection opportunities but cannot protect against malicious code authorized by a deployment or prove the absence of XSS in future changes.
 
-O serviço não deve prometer “zero knowledge” absoluto, anonimato forte, apagamento irrecuperável ou segurança independente de senha, dispositivo e operador. TLS continua obrigatório em produção mesmo com a criptografia do conteúdo.
+The service must not promise absolute “zero knowledge,” strong anonymity, irrecoverable erasure, or security independent of passwords, devices, and the operator. TLS remains mandatory in production even with content encryption.
 
-## Desenvolvimento e configuração
+## Development and configuration
 
-### Pré-requisitos e ambiente separado
+### Prerequisites and a separate environment
 
-- Node.js 22 ou superior e npm; a CI usa Node.js 24.
-- Banco Neon de desenvolvimento, separado da produção, com permissão para migrações. O driver da aplicação usa a interface serverless/WebSocket do Neon; um PostgreSQL local arbitrário não é automaticamente intercambiável sem adaptar a conexão.
-- Store Blob **privado**, dedicado ao ambiente, e seu token somente no backend.
-- Instância/chaves de desenvolvimento do Clerk para exercitar contas. Sem elas, o compartilhamento anônimo pode funcionar, mas a área autenticada fica indisponível.
+- Node.js 22 or later and npm; CI uses Node.js 24.
+- A development Neon database separate from production, with migration permissions. The application driver uses Neon's serverless/WebSocket interface; arbitrary local PostgreSQL is not automatically interchangeable without connection changes.
+- A **private** Blob store dedicated to the environment, with its token only on the backend.
+- A development Clerk instance/keys to exercise accounts. Without them, anonymous sharing can work, but the account area is unavailable.
 
-Não use banco, bucket ou segredos de produção no desenvolvimento ou em testes. A presença de um arquivo ignorado pelo Git não o torna seguro para compartilhar ou imprimir. Em especial, não deixe `.env.production.local` em um checkout usado para desenvolvimento: o runner de migrações carrega configuração via `@next/env`, cuja seleção pode priorizar arquivos de produção. Confira o destino efetivo em ambiente privado antes de migrar, sem imprimir a string de conexão em logs.
+Do not use production databases, buckets, or secrets for development or tests. A Git-ignored file is not safe to share or print. In particular, do not leave `.env.production.local` in a development checkout: the migration runner loads configuration through `@next/env`, whose selection may prioritize production files. Privately verify the effective target before migrating, without printing the connection string to logs.
 
 ```sh
 npm ci
@@ -337,110 +339,110 @@ cp .env.example .env.local
 npm run setup:secrets
 ```
 
-Preencha `.env.local` com a origem local, as conexões e os tokens do ambiente de desenvolvimento. Em seguida:
+Fill `.env.local` with the local origin, connections, and development-environment tokens. Then run:
 
 ```sh
 npm run db:migrate
 npm run dev
 ```
 
-O gerador preenche apenas segredos ausentes e não exibe valores. Preserva entradas já preenchidas; não valida nem corrige automaticamente placeholders ou configurações incorretas. Não o trate como procedimento de rotação de produção. `.env.local` e outros arquivos locais de ambiente são ignorados pelo Git.
+The generator fills only missing secrets and does not print their values. It preserves populated entries; it does not validate or automatically repair placeholders or incorrect configuration. Do not treat it as a production-rotation procedure. `.env.local` and other local environment files are Git-ignored.
 
-Sem a configuração necessária, as telas podem continuar acessíveis, mas o compartilhamento fica desabilitado. Não existe fallback que envie a senha em claro ou libere conteúdo para contornar a falta de serviços.
+Without the required configuration, pages may remain accessible, but sharing is disabled. There is no fallback that sends plaintext passwords or releases content to work around missing services.
 
-### Variáveis de ambiente
+### Environment variables
 
-| Variável                            | Finalidade e cuidado                                                                                                                                        |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `APP_ORIGIN`                        | Origem canônica, por exemplo `http://localhost:3000` no desenvolvimento. Produção exige HTTPS; participa da identidade OPAQUE e das verificações de origem. |
-| `DATABASE_URL`                      | Conexão de backend ao Neon; nunca expor ao navegador.                                                                                                       |
-| `BLOB_READ_WRITE_TOKEN`             | Acesso ao store privado. Nunca usar prefixo `NEXT_PUBLIC_`.                                                                                                 |
-| `OPAQUE_SERVER_SETUP`               | Setup secreto OPAQUE, gerado pela biblioteca. Preservar para abrir registros existentes.                                                                    |
-| `OPAQUE_SETUP_VERSION`              | Identifica a versão do setup; padrão `1`. Não implementa sozinho leitura com vários setups.                                                                 |
-| `HANDSHAKE_SEAL_KEY`                | Chave de cifragem do estado temporário das autenticações.                                                                                                   |
-| `RATE_LIMIT_HMAC_KEY`               | Segredo para pseudonimizar as identidades dos limitadores.                                                                                                  |
-| `CRON_SECRET`                       | Autoriza a rota de limpeza; enviar somente como credencial de backend.                                                                                      |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Chave publicável da instância Clerk correspondente ao ambiente; pode estar no bundle do cliente.                                                            |
-| `CLERK_SECRET_KEY`                  | Chave secreta Clerk, somente no backend.                                                                                                                    |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL`     | Rota de entrada: `/sign-in`.                                                                                                                                |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL`     | Rota de cadastro: `/sign-up`.                                                                                                                               |
+| Variable                            | Purpose and precautions                                                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `APP_ORIGIN`                        | Canonical origin, for example `http://localhost:3000` in development. Production requires HTTPS; it participates in OPAQUE identity and origin checks. |
+| `DATABASE_URL`                      | Backend Neon connection; never expose it to the browser.                                                                                               |
+| `BLOB_READ_WRITE_TOKEN`             | Private-store access. Never use the `NEXT_PUBLIC_` prefix.                                                                                             |
+| `OPAQUE_SERVER_SETUP`               | Secret OPAQUE setup generated by the library. Preserve it to open existing records.                                                                    |
+| `OPAQUE_SETUP_VERSION`              | Identifies the setup version; defaults to `1`. Does not itself implement reads with multiple setups.                                                   |
+| `HANDSHAKE_SEAL_KEY`                | Encryption key for temporary authentication state.                                                                                                     |
+| `RATE_LIMIT_HMAC_KEY`               | Secret for pseudonymizing rate-limit identities.                                                                                                       |
+| `CRON_SECRET`                       | Authorizes the cleanup route; send only as a backend credential.                                                                                       |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Publishable key for the environment's Clerk instance; may be included in the client bundle.                                                            |
+| `CLERK_SECRET_KEY`                  | Clerk secret key, backend only.                                                                                                                        |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL`     | Sign-in route: `/sign-in`.                                                                                                                             |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL`     | Sign-up route: `/sign-up`.                                                                                                                             |
 
-Não copiar valores reais para README, issues, screenshots, fixtures ou saída de CI. Segredos de ambientes distintos devem ser distintos. Um preview não deve receber automaticamente a infraestrutura de produção.
+Do not copy real values into the README, issues, screenshots, fixtures, or CI output. Different environments must have different secrets. A preview must not automatically receive production infrastructure.
 
-### Migrações
+### Migrations
 
-`npm run db:migrate` aplica arquivos numerados de `migrations/`, em ordem, numa transação com advisory lock e registro em `schema_migrations`. Migrações já aplicadas não são executadas novamente. Alterações futuras devem adicionar um arquivo novo, sem reescrever o histórico aplicado.
+`npm run db:migrate` applies numbered files from `migrations/` in order, within a transaction using an advisory lock and `schema_migrations` tracking. Applied migrations do not run again. Future changes should add a new file rather than rewrite applied history.
 
-O build e as requisições não executam migrações automaticamente. Mudanças que dependem de novas colunas precisam coordenar a migração do banco com a publicação do código. A CI testar um banco novo não significa que o schema de produção foi atualizado.
+Builds and requests do not run migrations automatically. Changes that depend on new columns must coordinate database migration with code deployment. A fresh-database CI test does not mean the production schema has been updated.
 
-## Publicação e operação
+## Deployment and operations
 
-### Vercel Hobby e regiões
+### Vercel Hobby and regions
 
-Alterações em `main` disparam deploy de produção pela integração Git. Não existe exigência de deploy diário. O trabalho diário é o cron de limpeza executado sobre a publicação existente.
+Changes to `main` trigger a production deployment through the Git integration. Daily deployments are not required. The daily task is cleanup cron running against the existing deployment.
 
-`vercel.json` fixa Functions em `iad1` e agenda `0 3 * * *`: 03:00 UTC, nominalmente 00:00 em São Paulo. No Hobby, o horário efetivo segue a janela e as limitações do agendador da plataforma; não é um compromisso de execução no minuto exato.
+`vercel.json` fixes Functions in `iad1` and schedules `0 3 * * *`: 03:00 UTC, nominally 00:00 in São Paulo. On Hobby, actual timing follows the platform scheduler's window and limitations; this is not a commitment to execution at the exact minute.
 
-A instalação atual usa Functions/Blob nos EUA e Neon em `aws-us-east-1`. Isso aproxima processamento e dados, mas não garante que Clerk, logs, backups, tráfego ou suboperadores permaneçam integralmente nessa região. A região do ambiente de desenvolvimento remoto é independente da região da aplicação. Não há garantia de residência exclusivamente brasileira ou latino-americana.
+The current installation uses Functions/Blob in the US and Neon in `aws-us-east-1`. This keeps processing and data close, but does not guarantee that Clerk, logs, backups, traffic, or subprocessors remain entirely in that region. The remote development environment's region is independent of the application region. There is no guarantee of exclusively Brazilian or Latin American data residency.
 
-O projeto deve permanecer no Hobby. Limites de arquivos, orçamento de storage e cron diário reduzem consumo, mas não garantem gratuidade de todos os serviços ou compatibilidade de qualquer finalidade de uso com seus termos. Cotas, preços e políticas dos provedores precisam ser conferidos antes de ampliar o uso; a aplicação não contrata upgrades automaticamente.
+The project must remain on Hobby. File limits, a storage budget, and daily cron reduce consumption, but do not guarantee that every service is free or that every intended use complies with provider terms. Provider quotas, prices, and policies must be checked before expanding use; the application does not purchase upgrades automatically.
 
-### Clerk, domínio e ambientes
+### Clerk, domain, and environments
 
-O app está em `efemero.rafael.run`; o domínio primário de produção configurado no Clerk é `rafael.run`, com serviços em `clerk.rafael.run` e `accounts.rafael.run`. O DNS é gerenciado pela Vercel. Os cinco CNAMEs incluem frontend, portal e autenticação de e-mail; valores específicos estão no [guia de publicação](docs/deployment.md).
+The app is hosted at `efemero.rafael.run`; the primary production domain configured in Clerk is `rafael.run`, with services at `clerk.rafael.run` and `accounts.rafael.run`. DNS is managed by Vercel. The five CNAMEs cover the frontend, portal, and email authentication; specific values are in the [deployment guide](docs/deployment.md).
 
-DNS correto e emissão dos certificados são etapas distintas. Configurar apenas o domínio não publica o aplicativo nem prova o login. Registros devem corresponder exatamente aos destinos fornecidos pelo Clerk, preservando políticas de e-mail existentes quando válidas. Não substituir tudo por wildcard nem desabilitar a validação TLS para contornar falhas.
+Correct DNS and certificate issuance are separate steps. Configuring a domain alone does not publish the application or prove login works. Records must exactly match Clerk's targets while preserving valid existing email policies. Do not replace them with a wildcard or disable TLS validation to bypass failures.
 
-As dependências de compartilhamento estão provisionadas na produção; previews não devem ser considerados ambientes completos ou isolados apenas por possuírem uma URL diferente. Provisionar recursos e segredos dedicados antes de testar compartilhamento em preview. Chaves Clerk, origem, banco, Blob e setup OPAQUE precisam corresponder ao mesmo ambiente.
+Sharing dependencies are provisioned in production; previews must not be assumed complete or isolated just because their URLs differ. Provision dedicated resources and secrets before testing sharing in a preview. Clerk keys, origin, database, Blob, and OPAQUE setup must correspond to the same environment.
 
-### Segredos, recuperação e sinais operacionais
+### Secrets, recovery, and operational signals
 
-OPAQUE não elimina a necessidade de proteger segredos no servidor. Controle de acesso à Vercel, Neon, Clerk, GitHub, DNS e tokens de automação faz parte da segurança do produto. Mudanças no frontend são mudanças na fronteira que vê a senha em claro.
+OPAQUE does not remove the need to protect server secrets. Access control for Vercel, Neon, Clerk, GitHub, DNS, and automation tokens is part of product security. Frontend changes affect the boundary that sees plaintext passwords.
 
-Perder o setup OPAQUE pode tornar artefatos existentes irrecuperáveis mesmo com a senha correta. Alterar `OPAQUE_SETUP_VERSION` não migra registros nem disponibiliza o setup anterior. Não há keyring ou migração de chaves em produção implementados. Uma troca planejada exige uma estratégia explícita, por exemplo aguardar o encerramento de todos os artefatos ativos antes de substituir o setup. Um comprometimento exige resposta a incidente e decisão sobre invalidar artefatos; simplesmente trocar a variável não remove a exposição passada.
+Losing the OPAQUE setup may make existing artifacts unrecoverable even with the correct password. Changing `OPAQUE_SETUP_VERSION` neither migrates records nor makes the old setup available. No keyring or production key migration is implemented. A planned replacement requires an explicit strategy, such as waiting for all active artifacts to expire before replacing the setup. A compromise requires incident response and a decision about invalidating artifacts; simply replacing an environment variable does not undo prior exposure.
 
-Trocar `HANDSHAKE_SEAL_KEY` pode invalidar autenticações em andamento. Trocar a origem canônica afeta registros existentes. Backups precisam proteger segredos e dados com acesso restrito, reconhecendo que retenção e recuperabilidade entram em tensão com a expectativa de efemeridade.
+Changing `HANDSHAKE_SEAL_KEY` may invalidate ongoing authentication. Changing the canonical origin affects existing records. Backups must protect secrets and data with restricted access, acknowledging the tension between retention/recoverability and ephemerality.
 
-Sinais úteis para operação incluem última limpeza bem-sucedida, idade da fila, respostas com `limited`, falhas de exclusão, uso de storage/banco, volume de requisições, erros de provedores e validade dos certificados. Não há uma camada completa de alertas e recuperação automatizada implementada. Qualquer observabilidade adicional deve usar dados agregados, sem capturar senhas, payloads, tokens, envelopes ou mensagens do protocolo.
+Useful operational signals include the latest successful cleanup, queue age, `limited` responses, deletion failures, storage/database use, request volume, provider errors, and certificate validity. A complete alerting and automated recovery layer is not implemented. Additional observability should use aggregate data without capturing passwords, payloads, tokens, envelopes, or protocol messages.
 
-## Estrutura do repositório e API
+## Repository structure and API
 
-| Caminho                        | Responsabilidade                                                |
-| ------------------------------ | --------------------------------------------------------------- |
-| `src/app/`                     | Páginas, layouts e rotas HTTP.                                  |
-| `src/components/`              | Criação, abertura, histórico e revogação na interface.          |
-| `src/workers/crypto.worker.ts` | Execução OPAQUE e criptografia no navegador.                    |
-| `src/lib/crypto.ts`            | Formato cifrado, envolvimento da DEK e descriptografia.         |
-| `src/lib/protocol.ts`          | Limites e tipos compartilhados; versão e perfil OPAQUE.         |
-| `src/server/artifacts.ts`      | Máquina de estados, autorizações, contadores e exclusão.        |
-| `src/server/accounts.ts`       | Identidade Clerk e username imutável.                           |
-| `src/server/storage.ts`        | Acesso ao Blob privado e inventário.                            |
-| `src/server/daily-cleanup.ts`  | Drenagem da limpeza com orçamento de trabalho.                  |
-| `src/proxy.ts`                 | CSP, nonce, cache e integração de sessão nas rotas pertinentes. |
-| `migrations/` e `scripts/`     | Schema versionado, migrações e geração inicial de segredos.     |
-| `tests/`                       | Testes de criptografia, serviço, HTTP e concorrência.           |
-| `.github/workflows/ci.yml`     | Validação automatizada em Node.js 24 e PostgreSQL 17.           |
+| Path                           | Responsibility                                                 |
+| ------------------------------ | -------------------------------------------------------------- |
+| `src/app/`                     | Pages, layouts, and HTTP routes.                               |
+| `src/components/`              | Creation, retrieval, history, and revocation interfaces.       |
+| `src/workers/crypto.worker.ts` | Browser OPAQUE and cryptographic execution.                    |
+| `src/lib/crypto.ts`            | Encrypted format, DEK wrapping, and decryption.                |
+| `src/lib/protocol.ts`          | Shared limits and types; version and OPAQUE profile.           |
+| `src/server/artifacts.ts`      | State machine, authorizations, counters, and deletion.         |
+| `src/server/accounts.ts`       | Clerk identity and immutable username.                         |
+| `src/server/storage.ts`        | Private Blob access and inventory.                             |
+| `src/server/daily-cleanup.ts`  | Cleanup draining within a work budget.                         |
+| `src/proxy.ts`                 | CSP, nonce, cache, and session integration on relevant routes. |
+| `migrations/` and `scripts/`   | Versioned schema, migrations, and initial secret generation.   |
+| `tests/`                       | Cryptography, service, HTTP, and concurrency tests.            |
+| `.github/workflows/ci.yml`     | Automated validation on Node.js 24 and PostgreSQL 17.          |
 
-As tabelas centrais são `accounts`, `artifacts`, `handshakes`, `rate_limits`, `cleanup_jobs`, `maintenance` e `schema_migrations`. Mensagens e arquivos em claro não são uma tabela do banco.
+The central tables are `accounts`, `artifacts`, `handshakes`, `rate_limits`, `cleanup_jobs`, `maintenance`, and `schema_migrations`. Plaintext messages and files are not stored in a database table.
 
-| Método e rota                       | Função e autorização                                                        |
-| ----------------------------------- | --------------------------------------------------------------------------- |
-| `POST /api/artifacts/reserve`       | Reserva e início do registro OPAQUE; sessão exigida na modalidade de conta. |
-| `POST /api/artifacts/upload`        | Emissão restrita de token e callbacks do SDK de upload.                     |
-| `POST /api/artifacts/commit`        | Publicação única, com credencial de gerenciamento e conferência do objeto.  |
-| `POST /api/artifacts/access/start`  | Início de autenticação do destinatário; sem entrega de conteúdo.            |
-| `POST /api/artifacts/access/finish` | Prova final, consumo da autorização e resposta binária.                     |
-| `POST /api/artifacts/access/visit`  | Contagem agregada de abertura para artefatos de conta.                      |
-| `POST /api/artifacts/revoke`        | Revogação por credencial de gerenciamento ou sessão do proprietário.        |
-| `GET /api/account`                  | Histórico paginado da própria conta, com cursor.                            |
-| `POST /api/account`                 | Definição única do username, com sessão Clerk.                              |
-| `GET /api/cron/cleanup`             | Manutenção protegida por `Authorization: Bearer` com `CRON_SECRET`.         |
+| Method and route                    | Purpose and authorization                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------------- |
+| `POST /api/artifacts/reserve`       | Reservation and OPAQUE registration start; session required in account mode. |
+| `POST /api/artifacts/upload`        | Restricted token issuance and upload-SDK callbacks.                          |
+| `POST /api/artifacts/commit`        | One-time publication with management credential and object verification.     |
+| `POST /api/artifacts/access/start`  | Recipient authentication start; no content delivery.                         |
+| `POST /api/artifacts/access/finish` | Final proof, authorization consumption, and binary response.                 |
+| `POST /api/artifacts/access/visit`  | Aggregate page-open counting for account artifacts.                          |
+| `POST /api/artifacts/revoke`        | Revocation by management credential or owner session.                        |
+| `GET /api/account`                  | Cursor-paginated history of the authenticated account.                       |
+| `POST /api/account`                 | One-time username selection with a Clerk session.                            |
+| `GET /api/cron/cleanup`             | Maintenance protected by `Authorization: Bearer` using `CRON_SECRET`.        |
 
-As páginas principais são `/`, `/a/:id`, `/:username/:id`, `/app`, `/sign-in`, `/sign-up`, `/revogar` e `/sobre`. As APIs são internas à aplicação e estão sujeitas às validações de origem e credenciais; esta tabela não estabelece um contrato público de integração externa.
+Main pages are `/`, `/a/:id`, `/:username/:id`, `/app`, `/sign-in`, `/sign-up`, `/revogar`, and `/sobre`. APIs are internal to the application and subject to origin and credential checks; this table does not establish a public external-integration contract.
 
-## Validação e próximos trabalhos
+## Validation and future work
 
-### Comandos de verificação
+### Verification commands
 
 ```sh
 npm run typecheck
@@ -449,32 +451,32 @@ npm run format:check
 npm run build
 ```
 
-`npm run check` reúne tipos, testes e build; a formatação tem comando separado. O build usa Webpack, incluindo o Worker criptográfico.
+`npm run check` combines types, tests, and build; formatting has a separate command. The build uses Webpack, including the cryptographic Worker.
 
-Por padrão, os testes SQL usam PGlite. Para executar com PostgreSQL real e conexões concorrentes, configure `TEST_DATABASE_URL` com um banco **descartável**, nunca produção. A suíte cria um schema isolado e o remove ao terminar. Na CI, PostgreSQL 17 roda em um serviço separado.
+SQL tests use PGlite by default. To run with real PostgreSQL and concurrent connections, configure `TEST_DATABASE_URL` with a **disposable** database, never production. The suite creates an isolated schema and removes it afterward. In CI, PostgreSQL 17 runs as a separate service.
 
-Os testes exercitam a biblioteca OPAQUE real, estabilidade da export key, senha incorreta, integridade e isolamento criptográfico, autenticação antes da leitura do storage, replay, expiração, último acesso concorrente, revogação, kill-switch, abandono de desafios, escopo de conta, paginação e repetição da limpeza. Adaptadores simulados de storage e testes de componentes têm alcance menor que uma operação completa com os provedores.
+Tests exercise the actual OPAQUE library, export-key stability, incorrect passwords, cryptographic integrity and isolation, authentication before storage reads, replay, expiration, concurrent final access, revocation, kill-switch, abandoned challenges, account scoping, pagination, and cleanup retries. Simulated storage adapters and component tests have narrower scope than complete operations against actual providers.
 
-Análises de dependências detectam somente vulnerabilidades conhecidas nas fontes consultadas. Uma execução sem alertas não demonstra ausência de falhas, correção do protocolo ou segurança da cadeia de build. Alterações no fluxo criptográfico exigem revisão específica, mesmo que tipos e testes continuem passando.
+Dependency analyses detect only known vulnerabilities in the sources consulted. A clean run does not demonstrate the absence of flaws, protocol correctness, or build-chain security. Cryptographic-flow changes require specific review even when types and tests still pass.
 
-### Trabalho ainda necessário
+### Remaining work
 
-- Completar cadastro, e-mail, sessão e gerenciamento com uma conta real em produção, além de confirmar o cron automático.
-- Exercitar Safari/iOS real, limites máximos autenticados e redes móveis; Chromium em viewport pequeno não equivale a um iPhone real. O custo Argon2id e cópias de buffers podem pressionar memória e tempo em dispositivos modestos.
-- Obter revisão independente da integração OPAQUE, composição das chaves, política de tentativa e fronteiras de autorização.
-- Revisar continuamente a configuração de segurança Clerk, incluindo subdomínios permitidos e `authorizedParties`; não há uma allowlist explícita de `authorizedParties` implementada no código atual.
-- Definir alertas de limpeza e capacidade, procedimento de incidente, recuperação de desastre e rotação/migração de segredos sem registrar dados sensíveis.
-- Minimizar metadados residuais, definir uma política completa de exclusão de conta e avaliar retenções e backups de cada provedor.
-- Reavaliar abuso e custos antes de ampliar uso. Não há upload multipart, retomada de transferências ou criptografia incremental de arquivos grandes no navegador.
+- Complete sign-up, email verification, sessions, and management with a real production account, and confirm automatic cron execution.
+- Exercise real Safari/iOS, maximum authenticated upload sizes, and mobile networks; Chromium at a small viewport does not equal a real iPhone. Argon2id cost and buffer copies may strain memory and execution time on modest devices.
+- Obtain an independent review of OPAQUE integration, key composition, attempt policy, and authorization boundaries.
+- Continuously review Clerk security configuration, including allowed subdomains and `authorizedParties`; the current code does not implement an explicit `authorizedParties` allowlist.
+- Define cleanup and capacity alerts, incident response, disaster recovery, and secret rotation/migration procedures without recording sensitive data.
+- Minimize residual metadata, define a complete account-deletion policy, and assess every provider's retention and backups.
+- Reassess abuse and costs before expanding use. Multipart uploads, transfer resumption, and incremental large-file encryption in the browser are not implemented.
 
-Ao reportar um problema de segurança, use um canal privado com o mantenedor, descreva o impacto e uma reprodução mínima com dados sintéticos. Não publique senhas, tokens, URLs com conteúdo real ou arquivos de ambiente. Não há programa formal de divulgação de vulnerabilidades documentado neste repositório.
+Report security issues through a private channel with the maintainer, describing impact and a minimal reproduction using synthetic data. Do not publish passwords, tokens, URLs containing real content, or environment files. This repository does not document a formal vulnerability-disclosure program.
 
-### Documentação e referências
+### Documentation and references
 
-- [Decisões de arquitetura](docs/architecture.md).
-- [Protocolo implementado](docs/protocol.md).
-- [Configuração e publicação](docs/deployment.md).
-- [Evidências e pendências de validação](docs/validation.md).
+- [Architecture decisions](docs/architecture.md).
+- [Implemented protocol](docs/protocol.md).
+- [Configuration and deployment](docs/deployment.md).
+- [Validation evidence and outstanding checks](docs/validation.md).
 - [OPAQUE — RFC 9807](https://www.rfc-editor.org/rfc/rfc9807.html).
 - [OPRF — RFC 9497](https://www.rfc-editor.org/rfc/rfc9497.html).
-- [Implementação Serenity Kit OPAQUE](https://github.com/serenity-kit/opaque).
+- [Serenity Kit OPAQUE implementation](https://github.com/serenity-kit/opaque).

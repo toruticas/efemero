@@ -64,7 +64,7 @@ describe("response security policy", () => {
       for (const path of [
         "/",
         "/a/abc",
-        "/alice/contrato",
+        "/alice/contract",
         "/sign-in-lookalike/x",
         "/api/artifacts/reserve",
       ]) {

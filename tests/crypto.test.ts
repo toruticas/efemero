@@ -6,9 +6,9 @@ describe("client-side authenticated encryption", () => {
   const key = "client-only-export-key-for-testing-which-is-never-a-session-key";
   const message = () => ({
     kind: "message" as const,
-    name: "confidencial.txt",
+    name: "confidential.txt",
     mime: "text/plain",
-    data: new TextEncoder().encode("segredo altamente confidencial").buffer,
+    data: new TextEncoder().encode("highly confidential secret").buffer,
   });
   it("encrypts metadata and payload, and reconstructs both on the client", async () => {
     const id = randomUUID(),
@@ -16,7 +16,7 @@ describe("client-side authenticated encryption", () => {
       encrypted = await encryptArtifact(payload, key, id);
     const raw = new TextDecoder().decode(encrypted.ciphertext);
     expect(raw).not.toContain(payload.name);
-    expect(raw).not.toContain("confidencial");
+    expect(raw).not.toContain("confidential");
     const decrypted = await decryptArtifact(
       encrypted.ciphertext,
       encrypted.wrappedKey,
@@ -63,7 +63,7 @@ describe("client-side authenticated encryption", () => {
     const id = randomUUID(),
       payload = {
         kind: "file" as const,
-        name: "binario.bin",
+        name: "binary.bin",
         mime: "application/octet-stream",
         data: new Uint8Array([0, 255, 128, 0, 13, 10]).buffer,
       };

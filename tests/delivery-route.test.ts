@@ -28,7 +28,7 @@ describe("delivery HTTP boundary", () => {
     });
   it("never reads or delivers ciphertext when the proof is rejected", async () => {
     mocks.authorize.mockRejectedValue(
-      new AppError(404, "UNAVAILABLE", "Indisponível"),
+      new AppError(404, "UNAVAILABLE", "Unavailable"),
     );
     const response = await POST(request());
     expect(response.status).toBe(404);

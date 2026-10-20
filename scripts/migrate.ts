@@ -6,7 +6,7 @@ nextEnv.loadEnvConfig(process.cwd());
 neonConfig.webSocketConstructor = WebSocket;
 async function main() {
   if (!process.env.DATABASE_URL)
-    throw new Error("Configure DATABASE_URL antes de executar a migração.");
+    throw new Error("Set DATABASE_URL before running migrations.");
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const client = await pool.connect();
   try {
@@ -32,7 +32,7 @@ async function main() {
       ]);
     }
     await client.query("COMMIT");
-    console.info("Migração concluída.");
+    console.info("Migration completed.");
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -43,7 +43,7 @@ async function main() {
 }
 main().catch(() => {
   console.error(
-    "Falha na migração. Verifique conexão e permissões do banco; detalhes sensíveis foram omitidos.",
+    "Migration failed. Check the database connection and permissions; sensitive details were omitted.",
   );
   process.exitCode = 1;
 });

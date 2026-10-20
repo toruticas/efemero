@@ -1,68 +1,67 @@
-# Validação — 17/10/2026
+# Validation — 2026-10-17
 
-## Resultado
+## Results
 
-- TypeScript: sem erros.
-- Build Next.js de produção: concluído, incluindo Web Worker da criptografia e rotas de API.
-- Vitest: 32 testes; execução padrão com PGlite e CI com PostgreSQL 17 real. Inclui fila diária maior que um lote de exclusão.
-- Formatação: Prettier e `git diff --check` sem erros.
-- `npm audit --omit=dev`: nenhuma vulnerabilidade conhecida reportada pelo registry nesta data. Isso não equivale a uma auditoria criptográfica.
-- HTTP no servidor de produção local: páginas inicial, abertura, informações, revogação e conta responderam; CSP com nonce por resposta foi compatível com os scripts renderizados; cabeçalhos de não armazenamento e bloqueio de frames presentes.
-- HTTP: Origin externo recusado; acesso por GET ao endpoint de entrega recusado; ausência de credenciais bloqueou o compartilhamento sem devolver envelope ou conteúdo.
+- TypeScript: no errors.
+- Next.js production build: completed, including the cryptographic Web Worker and API routes.
+- Vitest: 32 tests; default execution with PGlite and CI with real PostgreSQL 17. Includes a daily queue larger than one deletion batch.
+- Formatting: Prettier and `git diff --check` passed.
+- `npm audit --omit=dev`: no known vulnerabilities reported by the registry on this date. This is not a cryptographic audit.
+- HTTP against a local production server: home, retrieval, information, revocation, and account pages responded; the per-response nonce CSP was compatible with rendered scripts; no-storage and frame-blocking headers were present.
+- HTTP: external Origin rejected; GET access to the delivery endpoint rejected; missing credentials disabled sharing without returning the envelope or content.
 
-## Comportamentos exercitados
+## Behaviors exercised
 
-OPAQUE real para registro e autenticação, recuperação estável da export key, senha incorreta, isolamento entre artefatos, autenticação antes da leitura do storage, envelope cifrado, integridade do payload, chave e contexto incorretos, replay, último acesso concorrente, expiração sem cron, expiração do handshake, revogação concorrente, idempotência, falha e repetição da exclusão, gravação tardia depois de purge, autorização de upload e escopo do proprietário. O último acesso também remove o registro OPAQUE e o envelope do banco.
+Actual OPAQUE registration and authentication, stable export-key recovery, incorrect passwords, artifact isolation, authentication before storage reads, encrypted key envelope, payload integrity, incorrect key and context, replay, concurrent final access, expiration without cron, handshake expiration, concurrent revocation, idempotency, deletion failure and retry, late writes after purge, upload authorization, and owner scoping. Final access also removes the OPAQUE record and envelope from the database.
 
-O PostgreSQL real usa conexões independentes para testar concorrência. O adapter de storage em memória substitui apenas o provedor de objetos; os testes não substituem a criptografia por mocks. Há testes separados da fronteira HTTP com mocks para verificar que uma prova recusada nunca dispara leitura do objeto.
+Real PostgreSQL uses independent connections to test concurrency. The in-memory storage adapter replaces only the object provider; tests do not mock cryptography. Separate HTTP-boundary tests use mocks to verify that a rejected proof never triggers an object read.
 
-## Acesso ao repositório
+## Repository access
 
-O acesso a `toruticas/efemero` foi liberado em 17/10/2026. Tanto a integração quanto o CLI confirmaram a visibilidade privada e a permissão de escrita. O commit inicial remoto, contendo apenas o título no README, foi incorporado ao histórico local, mantendo o README completo da aplicação.
+Access to `toruticas/efemero` was granted on 2026-10-17. Both the integration and CLI confirmed private visibility and write permission. The initial remote commit, containing only the README title, was incorporated into local history while retaining the application's complete README.
 
-## Produção e navegador real
+## Production and real browser
 
-- HTTPS em `efemero.rafael.run`: resposta 200 com certificado validado, CSP com nonce e `no-store`. Página inicial sem erros de JavaScript em Chromium.
-- Integração Git: push em `main` criou automaticamente um deployment de produção na região `iad1`, sem publicação manual necessária.
-- Mensagem: registro OPAQUE, cifragem pelo Web Worker, upload privado e commit reais. Abertura em outro contexto do navegador recuperou o texto corretamente. A senha incorreta não produziu entrega. As requisições observadas não continham a senha nem o texto em claro; o link não tinha fragmento.
-- Arquivo: upload real, recuperação de nome original e download com bytes idênticos ao arquivo sintético. Revogação retornou 200 e nova tentativa com a senha correta foi bloqueada.
-- Limite de uma liberação: primeira entrega autorizada funcionou; nova tentativa recebeu 404 no início da autenticação, sem chamar o endpoint de entrega. O banco confirmou remoção do registro OPAQUE e do envelope no estado `exhausted`.
-- Prazo de um minuto: nova tentativa após a expiração recebeu 404, sem entrega, antes de executar uma limpeza posterior ao prazo. O bloqueio não depende do cron.
-- Limpeza: chamada sem credencial recebeu 403; chamada com o segredo configurado recebeu 200 e processou a fila. A janela de segurança dos uploads permaneceu respeitada.
-- Viewport móvel em Chromium: sem rolagem horizontal, formulário e botão de criação visíveis, sem erros de JavaScript. Não equivale a teste em Safari/iPhone real.
+- HTTPS at `efemero.rafael.run`: 200 response with validated certificate, nonce-based CSP, and `no-store`. Home page had no JavaScript errors in Chromium.
+- Git integration: a push to `main` automatically created a production deployment in `iad1`; no manual deployment was needed.
+- Message: actual OPAQUE registration, Worker encryption, private upload, and commit. Opening in another browser context correctly recovered the text. An incorrect password produced no delivery. Observed requests contained neither the password nor plaintext; the link had no fragment.
+- File: actual upload, original-name recovery, and download with bytes identical to the synthetic input. Revocation returned 200 and a new attempt with the correct password was blocked.
+- Single-release limit: the first authorized delivery worked; a subsequent attempt received 404 at authentication start, without calling the delivery endpoint. The database confirmed removal of the OPAQUE record and envelope in `exhausted` state.
+- One-minute lifetime: a new attempt after expiration received 404 without delivery, before any post-deadline cleanup. Access blocking does not depend on cron.
+- Cleanup: a call without credentials received 403; a call with the configured secret received 200 and processed the queue. Upload safety windows remained respected.
+- Mobile viewport in Chromium: no horizontal page scrolling, creation form and button visible, and no JavaScript errors. This is not a real Safari/iPhone test.
 
-A execução no navegador revelou uma incompatibilidade entre o CSP inicial e o endpoint de upload do SDK, `https://vercel.com/api/blob/`. O CSP foi corrigido para permitir apenas esse caminho e sua forma sem barra; o upload real passou depois da correção. As origens de scripts permanecem restritas por nonce.
+Browser execution exposed an incompatibility between the initial CSP and the SDK upload endpoint, `https://vercel.com/api/blob/`. CSP was corrected to allow only that path and its form without a trailing slash; the actual upload passed after the fix. Script execution remains nonce-restricted.
 
-## Pendências
+## Outstanding checks
 
-- Clerk: os cinco CNAMEs foram configurados em 19/10/2026 e o DNS público está correto. O DNS e o HTTPS do Clerk foram ativados em 19/10/2026; o formulário de login renderiza em produção. Validar cadastro, entrada, sessão, username e histórico com uma conta real.
-- Confirmar a execução automática diária pelo agendador. A rota e sua autorização foram testadas manualmente; o teste não espera a próxima janela diária.
-- Exercitar Safari/iOS real e transferências no tamanho máximo em redes móveis antes de ampliar o uso.
+- Clerk: the five CNAMEs were configured on 2026-10-19 and public DNS is correct. Clerk DNS and HTTPS were activated on 2026-10-19; the sign-in form renders in production. Validate sign-up, sign-in, session, username, and history with a real account.
+- Confirm automatic daily scheduler execution. The route and its authorization were tested manually; the test did not wait for the next daily window.
+- Exercise real Safari/iOS and maximum-size transfers on mobile networks before expanding use.
 
-Os testes usaram apenas artefatos sintéticos. Não comprovam prazos internos de retenção, backups ou caches dos provedores. O plano Vercel permanece Hobby; nenhuma mudança para plano pago foi realizada.
+Tests used only synthetic artifacts. They do not prove providers' internal retention, backup, or cache timelines. Vercel remains on Hobby; no upgrade to a paid plan was performed.
 
-## Evolução da área autenticada — 18/10/2026
+## Account-area update — 2026-10-18
 
-- Migração `002_account_controls` aplicada no Neon de produção em transação, com advisory lock, antes da publicação do código. Sem alteração de regras ou material criptográfico de artefatos existentes.
-- 46 testes passaram em PostgreSQL 17 real, com conexões concorrentes. Casos novos cobrem limites de 2/5 MiB, escopo da conta no HTTP e no serviço, username imutável no banco, paginação além de 100 registros, contadores agregados, replay de prova inválida, orçamento de desafios pendentes, falhas acumuladas, abandono sem cron, concorrência entre limpeza e prova válida e múltiplos lotes de kill-switch.
-- Typecheck, formatação e build de produção passaram. A validação visual dos componentes reais em Chromium usou um servidor local e respostas HTTP simuladas: onboarding, paginação, remoção, ID personalizado, kill-switch somente na conta e rejeição de arquivos acima de 2/5 MiB antes de qualquer reserva. Corrigida a posição do contêiner da tabela para evitar overflow da página em viewport de 390 px.
-- O painel mostra entregas autorizadas, sem afirmar que sejam descriptografias ou leituras concluídas. As aberturas de página são estimativas agregadas iniciadas nesta evolução. Não foram adicionados cookies de analytics, rastreamento de destinatários ou conteúdo em claro no histórico.
-- O navegador real de produção ainda não carrega o Clerk: erro de CORS no script servido por `clerk.rafael.run`, com tela sem campos de login. A configuração DNS exata do Clerk continua necessária para verificar cadastro/sessão e o painel autenticado de ponta a ponta em produção; os testes de painel com respostas simuladas não substituem essa verificação.
-- Publicação `f497122` concluída no domínio de produção. CI [39083399770](https://github.com/toruticas/efemero/actions/runs/39083399770) passou, incluindo testes em PostgreSQL real e build.
-- Chromium contra produção: arquivo binário de exatamente 2 MiB criado via OPAQUE/Blob privado, senha incorreta finalizada com prova rejeitada (404), senha correta autorizada (200), nome original recuperado no navegador e download idêntico byte a byte. O limite de uma entrega impediu novo início (404). Arquivo acima de 2 MiB foi bloqueado no navegador sem reserva; uma reserva cifrada acima do orçamento anônimo foi rejeitada pela API (400). `/api/account` sem sessão retornou 401. As chamadas de API não incluíram senha ou nome original do arquivo, e o navegador não registrou erros JavaScript. Os artefatos de QA foram revogados ou esgotados para remoção pelo fluxo normal.
+- Migration `002_account_controls` applied to production Neon transactionally, with an advisory lock, before code deployment. No changes to existing artifact policies or cryptographic material.
+- 46 tests passed with real PostgreSQL 17 and concurrent connections. New cases cover 2/5 MiB limits, HTTP and service account scoping, database-enforced immutable usernames, pagination beyond 100 records, aggregate counters, invalid-proof replay, pending-challenge budgets, accumulated failures, abandonment without cron, cleanup racing a valid proof, and multiple kill-switch batches.
+- Type checking, formatting, and production build passed. Visual validation of real components in Chromium used a local server and simulated HTTP responses: onboarding, pagination, removal, custom ID, account-only kill-switch, and rejection of files above 2/5 MiB before any reservation. The table container was repositioned to prevent page overflow in a 390 px viewport.
+- The dashboard shows authorized deliveries without claiming completed decryptions or reads. Page opens are aggregate estimates introduced in this update. No analytics cookies, recipient tracking, or plaintext history content were added.
+- At this point, the real production browser still failed to load Clerk: a CORS error on the script served by `clerk.rafael.run` left the page without login fields. Exact Clerk DNS configuration was still required to verify sign-up/session and the authenticated dashboard end to end in production; dashboard tests with simulated responses did not replace that verification.
+- Deployment `f497122` completed on the production domain. CI [39083399770](https://github.com/toruticas/efemero/actions/runs/39083399770) passed, including real PostgreSQL tests and build.
+- Chromium against production: a binary file of exactly 2 MiB was created using OPAQUE/private Blob; an incorrect password concluded with a rejected proof (404), the correct password was authorized (200), the original name was recovered in the browser, and the download matched byte for byte. The one-delivery limit blocked another start (404). A file over 2 MiB was rejected in the browser without a reservation; a ciphertext reservation above the anonymous budget was rejected by the API (400). `/api/account` without a session returned 401. API calls included neither the password nor original filename, and the browser recorded no JavaScript errors. QA artifacts were revoked or exhausted for removal through the normal flow.
 
-## DNS do Clerk — 19/10/2026
+## Clerk DNS — 2026-10-19
 
-- Valores exatos recebidos do prompt gerado pelo Clerk, incluindo os destinos DKIM e de e-mail específicos desta aplicação. Antes da alteração, nenhum dos cinco CNAMEs existia; havia resposta curinga da Vercel.
-- CLI oficial autenticado como `toruticascom`; projeto `efemero` e equipe `vercel-toruticascos-projects` confirmados antes das criações individuais. Cinco registros criados com sucesso. Nenhum plano ou serviço pago foi contratado.
-- Conferência pela API da Vercel: 21 registros no total; os 16 registros anteriores preservaram IDs, nomes, tipos, valores, TTLs, prioridades MX e comentários. DMARC mantido em `p=quarantine`.
-- Resolver DNS público retornou os cinco destinos CNAME esperados e os nameservers da Vercel. Não havia registros próprios desses nomes com valores errados; todos os cinco estavam ausentes.
-- Primeiro teste de navegador depois da mudança: `/sign-in` respondeu 200, mas o script Clerk ainda falhou. Requisição HTTPS ao script confirmou erro TLS no upstream, sem desabilitar verificação de certificado. Foi solicitado repetir a verificação do domínio no painel do Clerk; não considerar o formulário ou a sessão autenticada validados até esse teste passar.
+The following entries preserve the sequence of observations; later checks supersede earlier DNS, TLS, and rendering failures.
 
-- O proprietário informou que concluiu a verificação no Clerk. O teste imediatamente posterior ainda recebeu erro `SSLV3_ALERT_HANDSHAKE_FAILURE` do upstream HTTPS em `clerk.rafael.run`; por enquanto a ativação do certificado não foi comprovada. Os CNAMEs públicos permanecem corretos.
-
-- Documentação oficial do Clerk confirmou uma etapa explícita **Deploy certificates** após o checklist de produção. Os CAA públicos permitem LetsEncrypt (`letsencrypt.org`) e Google Trust Services (`pki.goog`), além do emissor já existente; não foram removidos ou alterados. Foi solicitado concluir a ativação dos certificados no Clerk.
-
-- Rechecagem posterior: script `clerk.browser.js` respondeu 200, com tipo JavaScript e CORS permitido. Chromium renderizou os campos de identificador e senha e o botão Continuar. Os testes não desabilitaram verificação TLS.
-- O carregamento real revelou violações CSP no Clerk Protect: workers `blob:` e sondagens HTTPS em portas além de 443. Ajustadas somente as páginas `/app`, `/sign-in` e `/sign-up`, conforme a [documentação CSP do Clerk](https://clerk.com/docs/guides/secure/best-practices/csp-headers). As páginas públicas mantêm workers restritos à própria origem. Telemetria opcional do SDK desabilitada; proteções de abuso continuam habilitadas. O teste de política cobre os dois grupos de rotas e prefixos parecidos.
-- Typecheck, 47 testes locais e build de produção passaram após o ajuste CSP. A execução de formulário e sessão de um usuário real não foi automatizada.
+- Exact values came from Clerk's generated prompt, including application-specific DKIM and mail targets. Before the change, none of the five CNAMEs existed; Vercel returned a wildcard response.
+- The official CLI was authenticated as `toruticascom`; project `efemero` and team `vercel-toruticascos-projects` were confirmed before individual record creation. All five records were created successfully. No paid plan or service was purchased.
+- Vercel API verification: 21 records total; the previous 16 retained IDs, names, types, values, TTLs, MX priorities, and comments. DMARC remained `p=quarantine`.
+- A public DNS resolver returned the five expected CNAME targets and Vercel nameservers. No explicit records for those names had incorrect values; all five were missing.
+- First browser test after the change: `/sign-in` returned 200 but the Clerk script still failed. An HTTPS request to the script confirmed an upstream TLS error without disabling certificate verification. The owner was asked to repeat domain verification in Clerk; neither the form nor authenticated session was considered validated at that stage.
+- The owner reported completing Clerk verification. The immediately following test still received `SSLV3_ALERT_HANDSHAKE_FAILURE` from the HTTPS upstream at `clerk.rafael.run`, so certificate activation was not yet proven. Public CNAMEs remained correct.
+- Official Clerk documentation confirmed an explicit **Deploy certificates** step after the production checklist. Public CAA records permitted LetsEncrypt (`letsencrypt.org`) and Google Trust Services (`pki.goog`) in addition to the existing issuer; they were neither removed nor changed. The owner was asked to complete Clerk certificate activation.
+- Later recheck: `clerk.browser.js` returned 200 with a JavaScript content type and allowed CORS. Chromium rendered identifier and password fields and the continue button. Tests did not disable TLS verification.
+- Actual loading exposed Clerk Protect CSP violations: `blob:` workers and HTTPS probes on ports beyond 443. Only `/app`, `/sign-in`, and `/sign-up` were adjusted according to [Clerk's CSP documentation](https://clerk.com/docs/guides/secure/best-practices/csp-headers). Public pages retain same-origin workers only. Optional SDK telemetry was disabled; abuse protections remain enabled. Policy tests cover both route groups and similar prefixes.
+- Type checking, 47 local tests, and production build passed after the CSP adjustment. A real user's form submission and authenticated session were not automated.
