@@ -529,7 +529,7 @@ export class ArtifactService {
        ORDER BY created_at DESC,id DESC LIMIT 51`,
       [
         ownerId,
-        after?.createdAt ?? null,
+        after ? new Date(after.createdAt) : null,
         after?.id ?? null,
         new Date(this.clock().getTime() - 30 * 24 * 60 * 60_000),
       ],
@@ -577,8 +577,27 @@ export class ArtifactService {
         [now],
       );
       for (const a of waiting.rows) await this.settleExpired(tx, a, now);
-      await tx.query(
-        `WITH expired AS (
+      if (tx.dialect === "sqlite") {
+        const expired = await tx.query<Artifact>(
+          `UPDATE artifacts SET state='expired',registration_record=NULL,wrapped_key=NULL WHERE purged_at IS NULL
+           AND ((state='ready' AND expires_at<=$1) OR (state='pending' AND pending_expires_at<=$1)) RETURNING *`,
+          [now],
+        );
+        for (const a of expired.rows)
+          await enqueue(
+            tx,
+            a.id,
+            new Date(
+              Math.max(
+                now.getTime(),
+                asDate(a.pending_expires_at).getTime() + 90_000,
+                a.delete_after ? asDate(a.delete_after).getTime() : 0,
+              ),
+            ),
+          );
+      } else
+        await tx.query(
+          `WITH expired AS (
           UPDATE artifacts SET state='expired',registration_record=NULL,wrapped_key=NULL WHERE purged_at IS NULL
           AND ((state='ready' AND expires_at<=$1) OR (state='pending' AND pending_expires_at<=$1))
           RETURNING id,pending_expires_at,delete_after
@@ -587,10 +606,10 @@ export class ArtifactService {
           FROM expired WHERE true
           ON CONFLICT(artifact_id) DO UPDATE
           SET not_before=GREATEST(cleanup_jobs.not_before,EXCLUDED.not_before)`,
-        [now],
-      );
+          [now],
+        );
       await tx.query(
-        `DELETE FROM handshakes h WHERE expires_at<=$1 AND NOT EXISTS
+        `DELETE FROM handshakes AS h WHERE expires_at<=$1 AND NOT EXISTS
          (SELECT 1 FROM artifacts a WHERE a.id=h.artifact_id AND a.state='ready' AND a.max_failures IS NOT NULL)`,
         [now],
       );

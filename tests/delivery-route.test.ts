@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({ authorize: vi.fn(), read: vi.fn() }));
 vi.mock("@/server/services", () => ({
   artifacts: () => ({ authorizeDelivery: mocks.authorize }),
 }));
-vi.mock("@/server/storage", () => ({ blobStorage: { read: mocks.read } }));
+vi.mock("@/server/storage", () => ({
+  getStorage: () => ({ read: mocks.read }),
+}));
 vi.mock("@/server/rate-limit", () => ({
   rateLimit: async () => {},
   requestIdentity: () => "test",

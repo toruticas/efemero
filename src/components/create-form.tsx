@@ -43,6 +43,7 @@ type Reservation = {
   serverIdentity: string;
   pathname: string;
   expiresAt: string;
+  uploadTransport?: "local" | "vercel-blob";
 };
 export function CreateForm({
   configured,
@@ -169,24 +170,45 @@ export function CreateForm({
         },
       });
       setProgress("Enviando o conteúdo já criptografado…");
-      await upload(
-        reservation.pathname,
-        new Blob([encrypted.ciphertext], { type: "application/octet-stream" }),
-        {
-          access: "private",
-          contentType: "application/octet-stream",
-          handleUploadUrl: "/api/artifacts/upload",
-          clientPayload: JSON.stringify({
-            id: reservation.id,
-            managementToken: reservation.managementToken,
+      if (reservation.uploadTransport === "local") {
+        const response = await fetch(
+          `/api/artifacts/upload/local?id=${encodeURIComponent(reservation.id)}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/octet-stream",
+              "X-Management-Token": reservation.managementToken,
+            },
+            body: encrypted.ciphertext,
+            credentials: "same-origin",
+            cache: "no-store",
+          },
+        );
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Não foi possível enviar o arquivo.");
+        }
+      } else
+        await upload(
+          reservation.pathname,
+          new Blob([encrypted.ciphertext], {
+            type: "application/octet-stream",
           }),
-          multipart: false,
-          onUploadProgress: (p) =>
-            setProgress(
-              `Enviando conteúdo criptografado… ${Math.round(p.percentage)}%`,
-            ),
-        },
-      );
+          {
+            access: "private",
+            contentType: "application/octet-stream",
+            handleUploadUrl: "/api/artifacts/upload",
+            clientPayload: JSON.stringify({
+              id: reservation.id,
+              managementToken: reservation.managementToken,
+            }),
+            multipart: false,
+            onUploadProgress: (p) =>
+              setProgress(
+                `Enviando conteúdo criptografado… ${Math.round(p.percentage)}%`,
+              ),
+          },
+        );
       setProgress("Finalizando seu artefato…");
       await api("/api/artifacts/commit", {
         id: reservation.id,

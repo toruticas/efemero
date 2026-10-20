@@ -1,5 +1,7 @@
 # Configuration and deployment
 
+This guide describes the existing managed Vercel/Neon deployment. For Docker, SQLite, local storage, and disabled account authentication, use the [self-hosting guide](self-hosting.md). The standalone configuration is separate and does not replace these production resources.
+
 ## Private repository
 
 The owner's repository is [`toruticas/efemero`](https://github.com/toruticas/efemero). Keep visibility **Private** and authorize integrations for this repository only when possible. Verify `private: true` through the API before pushing code. Do not copy `.env.local`, tokens, or CLI authentication directories into the repository.

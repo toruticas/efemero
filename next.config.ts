@@ -2,10 +2,13 @@ import type { NextConfig } from "next";
 
 const config: NextConfig = {
   poweredByHeader: false,
+  output: "standalone",
+  outputFileTracingIncludes: { "/*": ["./migrations/sqlite/*.sql"] },
   serverExternalPackages: [
     "@serenity-kit/opaque",
     "@neondatabase/serverless",
     "ws",
+    "pg",
   ],
   async headers() {
     return [

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, LockKeyhole } from "lucide-react";
+import { accountsEnabled } from "@/lib/runtime-options";
 export function Header() {
   return (
     <header className="header">
@@ -13,9 +14,11 @@ export function Header() {
         <span className="header-note">
           <span className="status-dot" /> Criptografia no navegador
         </span>
-        <Link className="nav-link" href="/app">
-          Minha conta <ArrowUpRight size={15} />
-        </Link>
+        {accountsEnabled() && (
+          <Link className="nav-link" href="/app">
+            Minha conta <ArrowUpRight size={15} />
+          </Link>
+        )}
       </nav>
     </header>
   );

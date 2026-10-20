@@ -2,7 +2,15 @@ import "server-only";
 import { del, get, head, list } from "@vercel/blob";
 import { AppError } from "./errors";
 import { required } from "./config";
+import { storageDriver, assertPersistentRuntime } from "@/lib/runtime-options";
+import { LocalStorage } from "./storage/local";
 export interface Storage {
+  write?(
+    path: string,
+    body: ReadableStream<Uint8Array>,
+    maximumBytes: number,
+    signal?: AbortSignal,
+  ): Promise<void>;
   inspect(path: string): Promise<{
     pathname: string;
     url: string;
@@ -12,6 +20,12 @@ export interface Storage {
   read(path: string): Promise<ReadableStream<Uint8Array>>;
   remove(path: string): Promise<void>;
   inventory(cursor?: string): Promise<{ paths: string[]; cursor?: string }>;
+}
+let local: LocalStorage | undefined;
+export function getStorage(): Storage {
+  assertPersistentRuntime();
+  if (storageDriver() === "vercel-blob") return blobStorage;
+  return (local ??= new LocalStorage(required("LOCAL_STORAGE_PATH")));
 }
 export const blobStorage: Storage = {
   async inspect(path) {

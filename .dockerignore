@@ -1,0 +1,13 @@
+.git
+.next
+node_modules
+.vercel
+.env*
+.private*
+data
+coverage
+*.log
+*.pem
+*.key
+*.sqlite*
+*.tsbuildinfo

@@ -1,45 +1,29 @@
 import "server-only";
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import WebSocket from "ws";
+import { assertPersistentRuntime, databaseDriver } from "@/lib/runtime-options";
 import { required } from "./config";
-export type Row = Record<string, unknown>;
-export type QueryResult<T> = { rows: T[]; rowCount: number };
-export interface QueryClient {
-  query<T extends Row = Row>(
-    sql: string,
-    values?: unknown[],
-  ): Promise<QueryResult<T>>;
-}
-export interface Database extends QueryClient {
-  transaction<T>(work: (tx: QueryClient) => Promise<T>): Promise<T>;
-}
-let database: Database | undefined;
+import { connectDatabase } from "./database/connect";
+import type { Database } from "./database/types";
+export type { Row, QueryResult, QueryClient, Database } from "./database/types";
+
+// Next.js can bundle routes separately. Share one connection and transaction
+// mutex across them, especially for the single-process in-memory deployment.
+const state = globalThis as typeof globalThis & {
+  __efemeroDatabase?: Database;
+};
 export function getDatabase(): Database {
-  if (database) return database;
-  neonConfig.webSocketConstructor = WebSocket;
-  const pool = new Pool({ connectionString: required("DATABASE_URL"), max: 4 });
-  const adapt = (client: Pick<Pool, "query">): QueryClient => ({
-    async query<T extends Row>(sql: string, values?: unknown[]) {
-      const result = await client.query(sql, values);
-      return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
-    },
-  });
-  database = {
-    ...adapt(pool),
-    async transaction<T>(work: (tx: QueryClient) => Promise<T>) {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const result = await work(adapt(client as unknown as Pool));
-        await client.query("COMMIT");
-        return result;
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    },
-  };
-  return database;
+  if (state.__efemeroDatabase) return state.__efemeroDatabase;
+  assertPersistentRuntime();
+  const driver = databaseDriver();
+  const url =
+    driver === "sqlite" ? required("SQLITE_PATH") : required("DATABASE_URL");
+  if (
+    driver === "sqlite" &&
+    url === ":memory:" &&
+    process.env.ALLOW_EPHEMERAL_DATABASE !== "true"
+  )
+    throw new Error(
+      "In-memory SQLite requires ALLOW_EPHEMERAL_DATABASE=true; all metadata is lost on restart.",
+    );
+  state.__efemeroDatabase = connectDatabase(driver, url);
+  return state.__efemeroDatabase;
 }

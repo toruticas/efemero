@@ -4,8 +4,15 @@ import {
   type NextRequest,
   type NextFetchEvent,
 } from "next/server";
+import {
+  accountsEnabled,
+  clerkPublishableKey,
+  authProvider,
+  storageDriver,
+  loopbackHTTP,
+} from "@/lib/runtime-options";
 function clerkOrigin() {
-  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const key = clerkPublishableKey();
   if (!key) return "";
   try {
     const host = atob(key.split("_").slice(2).join("_")).replace(/\$$/, "");
@@ -22,10 +29,18 @@ export default async function proxy(
     String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24))),
   );
   const dev = process.env.NODE_ENV !== "production",
-    authOrigin = clerkOrigin();
-  const accountPage = /^\/(app|sign-in|sign-up)(\/|$)/.test(
-    request.nextUrl.pathname,
-  );
+    authOrigin = accountsEnabled() ? clerkOrigin() : "";
+  const accountPage =
+    /^\/(app|sign-in|sign-up)(\/|$)/.test(request.nextUrl.pathname) &&
+    authProvider() === "clerk";
+  const clerkConnections =
+    authProvider() === "clerk"
+      ? `${authOrigin} https://*.clerk.accounts.dev https://*.clerk.com`
+      : "";
+  const blobConnections =
+    storageDriver() === "vercel-blob"
+      ? "https://vercel.com/api/blob https://vercel.com/api/blob/ https://blob.vercel-storage.com https://*.blob.vercel-storage.com"
+      : "";
   // Clerk Protect needs blob workers and HTTPS probes on non-default ports.
   // Keep these permissions scoped to pages that actually load Clerk.
   const protectConnections = accountPage
@@ -40,12 +55,12 @@ export default async function proxy(
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${dev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
-    "img-src 'self' data: blob: https://img.clerk.com https://images.clerk.dev",
-    `connect-src 'self' https://vercel.com/api/blob https://vercel.com/api/blob/ https://blob.vercel-storage.com https://*.blob.vercel-storage.com ${authOrigin} https://*.clerk.accounts.dev https://*.clerk.com${protectConnections}${dev ? " ws: http://localhost:*" : ""}`,
-    `frame-src ${authOrigin || "'self'"} https://challenges.cloudflare.com${protectFrames}`,
+    `img-src 'self' data: blob:${authProvider() === "clerk" ? " https://img.clerk.com https://images.clerk.dev" : ""}`,
+    `connect-src 'self' ${blobConnections} ${clerkConnections}${protectConnections}${dev ? " ws: http://localhost:*" : ""}`,
+    `frame-src ${authOrigin || "'self'"}${authProvider() === "clerk" ? " https://challenges.cloudflare.com" : ""}${protectFrames}`,
     `worker-src 'self'${accountPage ? " blob:" : ""}`,
     "form-action 'self'",
-    ...(dev ? [] : ["upgrade-insecure-requests"]),
+    ...(dev || loopbackHTTP() ? [] : ["upgrade-insecure-requests"]),
   ].join("; ");
   const forwarded = new Headers(request.headers);
   forwarded.set("x-nonce", nonce);
@@ -58,13 +73,10 @@ export default async function proxy(
       request.nextUrl.pathname,
     );
   let response: Response;
-  if (
-    needsIdentity &&
-    process.env.CLERK_SECRET_KEY &&
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  ) {
-    const handler = clerkMiddleware(() =>
-      NextResponse.next({ request: { headers: forwarded } }),
+  if (needsIdentity && accountsEnabled()) {
+    const handler = clerkMiddleware(
+      () => NextResponse.next({ request: { headers: forwarded } }),
+      { publishableKey: clerkPublishableKey() },
     );
     response =
       (await handler(request, event)) ||

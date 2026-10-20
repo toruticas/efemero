@@ -1,7 +1,7 @@
 import { finishSchema } from "@/server/schemas";
 import { bodyJson, route, sameOrigin } from "@/server/http";
 import { artifacts } from "@/server/services";
-import { blobStorage } from "@/server/storage";
+import { getStorage } from "@/server/storage";
 import { rateLimit, requestIdentity } from "@/server/rate-limit";
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -13,7 +13,7 @@ export const POST = route(async (request) => {
     input.handshakeId,
     input.finishLoginRequest,
   );
-  const stream = await blobStorage.read(delivery.pathname);
+  const stream = await getStorage().read(delivery.pathname);
   // A one-shot response: no reusable storage URL or bearer download token.
   return new Response(stream, {
     headers: {

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as opaque from "@serenity-kit/opaque";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { ArtifactService } from "@/server/artifacts";
 import { rateLimit } from "@/server/rate-limit";
 import { dailyCleanup } from "@/server/daily-cleanup";
@@ -734,11 +734,12 @@ describe("artifact protocol and lifecycle", () => {
   });
   it("pages through the entire owner history without duplicates or crossing accounts", async () => {
     const owner = await account();
-    await database.db.query(
-      `INSERT INTO artifacts(id,owner_id,namespace,slug,created_at,expires_at,pending_expires_at,declared_size,blob_path,setup_version,management_hash,purged_at)
-      SELECT gen_random_uuid(),$1,'alice','old-'||n,$2,$2,$2,1,'old-'||n,'1','',$2 FROM generate_series(1,123) n`,
-      [owner.id, now],
-    );
+    for (let n = 1; n <= 123; n++)
+      await database.db.query(
+        `INSERT INTO artifacts(id,owner_id,namespace,slug,created_at,expires_at,pending_expires_at,declared_size,blob_path,setup_version,management_hash,purged_at)
+       VALUES($1,$2,'alice',$3,$4,$4,$4,1,$3,'1','',$4)`,
+        [randomUUID(), owner.id, `old-${n}`, now],
+      );
     const a = await service.history(owner.id);
     expect(a.artifacts).toHaveLength(50);
     expect((await service.history("other", a.nextCursor!)).artifacts).toEqual(
@@ -774,15 +775,25 @@ describe("artifact protocol and lifecycle", () => {
   });
   it("drains more than one batch of abandoned kill-switch attempts in the daily job", async () => {
     const owner = await account();
-    await database.db.query(
-      `INSERT INTO artifacts(id,owner_id,namespace,slug,state,created_at,expires_at,pending_expires_at,declared_size,blob_path,setup_version,management_hash,max_failures)
-      SELECT gen_random_uuid(),$1,'alice','batch-'||n,'ready',$2,$2::timestamptz+INTERVAL '1 hour',$2::timestamptz+INTERVAL '15 minutes',1,'batch-'||n,'1','',1 FROM generate_series(1,105) n`,
-      [owner.id, now],
-    );
-    await database.db.query(
-      `INSERT INTO handshakes(id,artifact_id,sealed_state,expires_at) SELECT gen_random_uuid(),id,'expired-state',$1::timestamptz+INTERVAL '2 minutes' FROM artifacts`,
-      [now],
-    );
+    for (let n = 1; n <= 105; n++) {
+      const id = randomUUID();
+      await database.db.query(
+        `INSERT INTO artifacts(id,owner_id,namespace,slug,state,created_at,expires_at,pending_expires_at,declared_size,blob_path,setup_version,management_hash,max_failures)
+         VALUES($1,$2,'alice',$3,'ready',$4,$5,$6,1,$3,'1','',1)`,
+        [
+          id,
+          owner.id,
+          `batch-${n}`,
+          now,
+          new Date(now.getTime() + 3600_000),
+          new Date(now.getTime() + 900_000),
+        ],
+      );
+      await database.db.query(
+        "INSERT INTO handshakes(id,artifact_id,sealed_state,expires_at) VALUES($1,$2,'expired-state',$3)",
+        [randomUUID(), id, new Date(now.getTime() + 120_000)],
+      );
+    }
     now = new Date(now.getTime() + 120_000);
     const result = await dailyCleanup(service);
     expect(result.batches).toBe(2);

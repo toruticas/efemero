@@ -1,5 +1,7 @@
 # Architecture decisions
 
+The application supports both managed deployment and [standalone self-hosting](self-hosting.md). Database adapters cover Neon, standard PostgreSQL TCP, and SQLite; storage adapters cover private Vercel Blob and local disk. `AUTH_PROVIDER=none` disables account identity while keeping artifact password authentication. The current Vercel + Neon production configuration remains unchanged.
+
 ## Addressing and identity
 
 The short path is a locator, not a credential. The artifact's immutable internal identifier binds its OPAQUE registration and cryptographic context independently of the public username and slug. Slugs must be unique per user and must not be automatically reused after expiration. System prefixes are reserved.
@@ -35,7 +37,7 @@ Abandoned reservations and uploads have deadlines and are removed by cleanup. Up
 5. Stream ciphertext through the authorized gateway, without storage credentials or a reusable link that could bypass policy.
 6. Unwrap the key and decrypt in the browser.
 
-The MVP counts a release when authorizing delivery. Connection failures may consume it. Human reading completion is not verifiable. Authentication state does not depend on a single Function's memory. Database failures block delivery.
+The MVP counts a release when authorizing delivery. Connection failures may consume it. Human reading completion is not verifiable. Authentication state does not depend on a single Function's memory. Database failures block delivery. SQLite uses serialized `BEGIN IMMEDIATE` transactions and a process-wide queue in place of row/advisory locks; its in-memory mode is explicitly opt-in and loses these records on restart.
 
 ## Expiration and deletion
 

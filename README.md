@@ -8,8 +8,11 @@ Recipients need the link and the artifact password. The URL contains no key, pas
 
 Repository documentation, code identifiers, comments, test descriptions, and maintainer-facing output use English. The product interface is currently in Brazilian Portuguese. Existing public routes and cryptographic protocol identifiers retain their original spelling for compatibility.
 
+Efemero also supports a single-container self-hosted installation with SQLite, local ciphertext storage, and no account provider. Cloud services are optional; the existing managed production deployment remains unchanged.
+
 ## Contents
 
+- [Self-hosting](#self-hosting)
 - [Status and validation scope](#status-and-validation-scope)
 - [Product model](#product-model)
 - [Architecture and technology choices](#architecture-and-technology-choices)
@@ -24,19 +27,33 @@ Repository documentation, code identifiers, comments, test descriptions, and mai
 - [Repository structure and API](#repository-structure-and-api)
 - [Validation and future work](#validation-and-future-work)
 
+## Self-hosting
+
+```sh
+docker compose up -d --build
+```
+
+Open <http://localhost:3000>. The standalone image uses file-backed SQLite and private local storage, disables Clerk, generates and persists its own service secrets, and runs cleanup every five minutes. Keep its `/data` volume: it contains both encrypted artifacts and the server state needed to open them. No external service is required.
+
+See the [self-hosting guide](docs/self-hosting.md) for TLS, volumes, ordinary PostgreSQL, optional Clerk, and the explicit opt-in for in-memory SQLite. Memory mode loses all database state on restart and can leave orphaned ciphertext on disk. SQLite/local storage are for a persistent single-host process, not Vercel Functions.
+
+Repository defaults still select Neon and private Vercel Blob unless overridden. Docker supplies separate local defaults; it does not change the current Vercel + Neon production configuration.
+
 ## Status and validation scope
 
-The project implements anonymous sharing, an account area, immutable usernames, custom IDs, paginated history, aggregate counters, revocation, and an optional kill-switch. The current infrastructure uses Vercel Hobby, Neon, private Blob storage, and Clerk.
+The project implements anonymous sharing, an account area, immutable usernames, custom IDs, paginated history, aggregate counters, revocation, and an optional kill-switch. The current managed production infrastructure uses Vercel Hobby, Neon, private Blob storage, and Clerk. Self-hosting can instead use SQLite, disk storage, and disabled accounts.
 
 As of the 2026-10-19 verification:
 
 - Anonymous sharing was exercised in Chromium against the actual services: creation, incorrect passwords, message decryption, byte-identical downloads, revocation, a single-delivery limit, and expiration without relying on cron. An anonymous file of exactly 2 MiB was also transferred.
 - The five Clerk CNAME records are configured. HTTPS and rendering of the sign-in and sign-up forms work. `/app` redirects to sign-in without a session. The public pages inspected do not load the Clerk SDK.
-- The latest implementation CI passed with **47 tests**, real PostgreSQL 17, type checking, formatting, and a production build. This count describes that revision, not a permanent guarantee.
+- Before the self-hosting update, implementation CI passed with **47 tests**, real PostgreSQL 17, type checking, formatting, and a production build. This count describes that revision, not a permanent guarantee.
 - **Sign-up, email verification, sign-in, and dashboard use with a real production account still require end-to-end validation.** Backend authorization tests and component tests with simulated responses do not replace that exercise.
 - The cleanup route and its authorization were tested manually; this does not prove execution in the next scheduled daily window or the providers' internal deletion timelines.
 
 The project has not undergone an independent cryptographic audit. The limitations below are part of the security model even when every test passes. The [validation log](docs/validation.md) contains dated evidence; older entries describe the state at that time and may precede later fixes.
+
+The self-hosting update adds a 65-test suite exercised locally against PGlite and SQLite, an offline Docker smoke test with restart checks, and a real Chromium transfer of 2 MiB. Detailed evidence is recorded in the validation log. These checks do not replace the outstanding real-account Clerk validation.
 
 ## Product model
 
@@ -69,14 +86,14 @@ Clerk login authenticates the **creator** and authorizes history and management.
 flowchart LR
   C["Creator's browser<br/>OPAQUE and encryption in a Worker"]
   R["Recipient's browser<br/>OPAQUE and local decryption"]
-  A["Next.js on Vercel<br/>API, authorization, and policies"]
-  D[("Neon / PostgreSQL<br/>metadata, records, and queues")]
-  B[("Private Vercel Blob<br/>encrypted content")]
-  K["Clerk<br/>creator identity"]
-  T["Daily cron<br/>cleanup and reconciliation"]
+  A["Next.js API<br/>Vercel or standalone host"]
+  D[("PostgreSQL or SQLite<br/>metadata, records, and queues")]
+  B[("Private Blob or local disk<br/>encrypted content")]
+  K["Optional Clerk<br/>creator identity"]
+  T["Cron or local timer<br/>cleanup and reconciliation"]
 
-  C -->|"OPAQUE registration and encrypted key envelope"| A
-  C -->|"Direct ciphertext upload"| B
+  C -->|"OPAQUE, key envelope, and local uploads"| A
+  C -->|"Managed direct ciphertext upload"| B
   R <-->|"OPAQUE challenge and proof"| A
   A -->|"Ciphertext after authorization"| R
   A <--> D
@@ -87,19 +104,19 @@ flowchart LR
 
 During normal operation, the browser sees the password, text, file, and keys in plaintext. The API receives OPAQUE messages and metadata required to enforce policies; Blob receives encrypted bytes. The server holds its own authentication and infrastructure-access secrets. This separation reduces data exposure, but does not make the operator unable to attack passwords or modify the frontend delivered to users.
 
-| Technology                                | Role and reason for choosing it                                                                                         | Trade-off or limitation                                                                                           |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Next.js 16, React 19, and TypeScript      | Interface and API in one project, with direct Vercel integration.                                                       | Dependency on the framework, security updates, and correct cache, header, and runtime configuration.              |
-| Vercel Functions, Node.js runtime         | Backend without a dedicated server; receives proofs and streams authorized objects.                                     | Execution limits, platform dependency, and request/transfer consumption. Routes have a 60-second `maxDuration`.   |
-| Neon / PostgreSQL                         | Persistent state, parameterized queries, and transactions with row locks for concurrent policy enforcement.             | Database downtime blocks authorizations. Abusive traffic can still consume database capacity.                     |
-| **Private** Vercel Blob                   | Stores ciphertext; direct uploads avoid routing files through the Next.js API request body.                             | Physical deletion is asynchronous; tokens, operational consistency, and provider limits require attention.        |
-| Clerk                                     | Creator sign-up and sessions without building an identity system.                                                       | External service with its own DNS, certificates, availability, and data processing.                               |
-| `@serenity-kit/opaque` 1.1.0              | Rust/WASM OPAQUE implementation, pinned in the lockfile, for authentication without transmitting the artifact password. | Sensitive cryptographic integration, memory cost, and server-secret management.                                   |
-| Web Crypto and Web Worker                 | Browser-native AES-GCM and HKDF; cryptographic work off the interface thread.                                           | A Worker is not a secure enclave. Memory, the browser, and delivered JavaScript remain within the trust boundary. |
-| Zod                                       | Strict input validation and rejection of unexpected fields.                                                             | Format validation does not prove cryptographic correctness or make a modified client trustworthy.                 |
-| Vitest, PGlite, and real PostgreSQL in CI | Fast tests plus transaction and concurrency checks with independent connections.                                        | Tests do not cover every browser, provider, or adversarial scenario.                                              |
+| Technology                                | Role and reason for choosing it                                                                                                               | Trade-off or limitation                                                                                           |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Next.js 16, React 19, and TypeScript      | Interface and API in one project, with direct Vercel integration.                                                                             | Dependency on the framework, security updates, and correct cache, header, and runtime configuration.              |
+| Vercel Functions, Node.js runtime         | Backend without a dedicated server; receives proofs and streams authorized objects.                                                           | Execution limits, platform dependency, and request/transfer consumption. Routes have a 60-second `maxDuration`.   |
+| PostgreSQL / SQLite                       | Persistent state and parameterized queries; PostgreSQL row locks or serialized SQLite write transactions enforce concurrent policy decisions. | Database downtime blocks authorizations. Abusive traffic can still consume database capacity.                     |
+| **Private** Vercel Blob                   | Stores ciphertext; direct uploads avoid routing files through the Next.js API request body.                                                   | Physical deletion is asynchronous; tokens, operational consistency, and provider limits require attention.        |
+| Clerk                                     | Creator sign-up and sessions without building an identity system.                                                                             | External service with its own DNS, certificates, availability, and data processing.                               |
+| `@serenity-kit/opaque` 1.1.0              | Rust/WASM OPAQUE implementation, pinned in the lockfile, for authentication without transmitting the artifact password.                       | Sensitive cryptographic integration, memory cost, and server-secret management.                                   |
+| Web Crypto and Web Worker                 | Browser-native AES-GCM and HKDF; cryptographic work off the interface thread.                                                                 | A Worker is not a secure enclave. Memory, the browser, and delivered JavaScript remain within the trust boundary. |
+| Zod                                       | Strict input validation and rejection of unexpected fields.                                                                                   | Format validation does not prove cryptographic correctness or make a modified client trustworthy.                 |
+| Vitest, PGlite, and real PostgreSQL in CI | Fast tests plus transaction and concurrency checks with independent connections.                                                              | Tests do not cover every browser, provider, or adversarial scenario.                                              |
 
-There is no Redis, external broker, or additional queue service. Handshakes, rate limits, and the deletion queue live in PostgreSQL, reducing operational components. Concurrency guarantees depend on this shared state, without counters held in a single Function's memory.
+There is no Redis, external broker, or additional queue service. Handshakes, rate limits, and the deletion queue live in the selected database, reducing operational components. Concurrency guarantees depend on this shared state, without counters held in a single Function's memory.
 
 The backend is transient while handling requests, but the database and storage persist until cleanup. The product does not depend on a continuously running process to maintain a timer for each artifact.
 
@@ -119,7 +136,7 @@ The client's cryptographic identifier is the artifact's immutable internal UUID.
 | --------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Artifact password           | Creator's and recipient's browsers                    | Enables authentication and key recovery. Weak passwords remain vulnerable to guessing.                                                                            |
 | `OPAQUE_SERVER_SETUP`       | Backend, outside artifact tables                      | Contains OPRF material and the server's private authentication key. Required to participate in the protocol and must be treated as a critical secret.             |
-| OPAQUE registration record  | PostgreSQL, per artifact                              | Enables authentication together with the setup. It is not a plaintext password, but is not harmless if server secrets leak.                                       |
+| OPAQUE registration record  | Selected database, per artifact                       | Enables authentication together with the setup. It is not a plaintext password, but is not harmless if server secrets leak.                                       |
 | Client `exportKey`          | Browser Worker                                        | Provides the material for wrapping the content key; never sent to the API.                                                                                        |
 | OPAQUE `sessionKey`         | Available to protocol participants                    | **Does not encrypt or wrap the content key**, because the server also knows it.                                                                                   |
 | Data encryption key, or DEK | Random, per artifact; plaintext in the browser        | Encrypts the message/file and original metadata. Only its encrypted envelope is stored in the database.                                                           |
@@ -146,6 +163,8 @@ GCM detects byte tampering without the correct key, and the contexts bind the op
 
 ### Creation
 
+These steps describe the managed upload transport. In local-storage mode, the browser sends ciphertext to a one-shot, management-authorized PUT route instead of requesting a Blob token; completed files are published atomically without overwrite. Authentication, encryption, and commit checks remain in place.
+
 1. The browser validates the input and starts OPAQUE registration in the Worker. In account mode, the API verifies the session and resolves ownership on the server.
 2. `reserve` reserves the UUID, address, deadline, byte budget, and policy. The backend returns the OPAQUE response and management credential. The lifetime starts at reservation, not at upload completion.
 3. The browser completes registration, encrypts the payload, and wraps the DEK. The password, plaintext DEK, and `exportKey` remain on the client.
@@ -167,7 +186,7 @@ Recipients do not receive a reusable signed GET URL that could bypass counters. 
 
 An authorized delivery can consume the limit even if storage, the network, or decryption later fails. There is no automatic refund or download resumption. Authorizing first prevents the same proof from being reused for multiple deliveries.
 
-Row locks serialize concurrent proofs, the final allowed access, revocation, and the kill-switch. An already authorized transfer may continue after concurrent revocation: the policy prevents **new authorizations**, without reclaiming bytes already released.
+PostgreSQL row locks or SQLite write transactions serialize concurrent proofs, the final allowed access, revocation, and the kill-switch. An already authorized transfer may continue after concurrent revocation: the policy prevents **new authorizations**, without reclaiming bytes already released.
 
 ## Expiration, kill-switch, and removal
 
@@ -198,7 +217,7 @@ Pending challenges are bounded by the remaining failure budget. When every slot 
 
 ### Physical cleanup and reconciliation
 
-Vercel cron calls `/api/cron/cleanup` daily using `CRON_SECRET`. The PostgreSQL-backed queue uses leases and `FOR UPDATE SKIP LOCKED` to coordinate executions and support retries after failures.
+Vercel cron calls `/api/cron/cleanup` daily using `CRON_SECRET`. The database-backed queue uses leases and PostgreSQL `FOR UPDATE SKIP LOCKED` or SQLite write transactions to coordinate executions and support retries after failures. Standalone Docker uses an in-process timer rather than Vercel Cron.
 
 Deletion respects a safety window: eligibility considers the current time, 90 seconds after the latest authorized delivery, and 90 seconds after upload-token validity, as applicable. This avoids interfering with authorized transfers and reduces races with still-valid uploads.
 
@@ -215,7 +234,7 @@ Backlogs, outages, scheduler failures, or execution timeouts can delay physical 
 | Location                             | Data present during normal operation                                                                                                                            |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Browser                              | Artifact password, content, original name and MIME type, temporary keys; recipients can keep their copy.                                                        |
-| PostgreSQL                           | Account and Clerk ID, username, URL, UUID, dates, policy, declared size, state, counters, storage path, OPAQUE record, and encrypted key envelope while needed. |
+| Selected database                    | Account and Clerk ID, username, URL, UUID, dates, policy, declared size, state, counters, storage path, OPAQUE record, and encrypted key envelope while needed. |
 | Private Blob                         | Encrypted payload, size, and operational object metadata; original name and MIME type are inside the encrypted payload.                                         |
 | Clerk                                | Identity, session, and access-protection data according to the service's configuration and policies.                                                            |
 | Network infrastructure and providers | May observe IP addresses, hostnames, accessed URLs, timestamps, sizes, and operational logs according to their position and policies.                           |
@@ -274,7 +293,7 @@ The reader retains compatibility with older ciphertexts of up to 25 MiB plus for
 
 ### Rate limits
 
-Fixed windows use atomic PostgreSQL updates. “Per network” means the identity derived from Vercel's forwarding header; outside Vercel, requests share a conservative local identity rather than trusting arbitrary IP headers.
+Fixed windows use atomic database updates. “Per network” means the identity derived from Vercel's forwarding header; outside Vercel, requests share a conservative local identity rather than trusting arbitrary IP headers.
 
 | Operation          | Per network        | Other limits                                                  |
 | ------------------ | ------------------ | ------------------------------------------------------------- |
@@ -320,15 +339,15 @@ The CSP uses a per-response nonce, `strict-dynamic`, explicit WASM support, and 
 
 Public pages do not mount `ClerkProvider`; the account flow loads its own services. CSP reduces some injection opportunities but cannot protect against malicious code authorized by a deployment or prove the absence of XSS in future changes.
 
-The service must not promise absolute “zero knowledge,” strong anonymity, irrecoverable erasure, or security independent of passwords, devices, and the operator. TLS remains mandatory in production even with content encryption.
+The service must not promise absolute “zero knowledge,” strong anonymity, irrecoverable erasure, or security independent of passwords, devices, and the operator. TLS remains mandatory for public production origins even with content encryption; only standalone loopback permits HTTP.
 
 ## Development and configuration
 
 ### Prerequisites and a separate environment
 
-- Node.js 22 or later and npm; CI uses Node.js 24.
-- A development Neon database separate from production, with migration permissions. The application driver uses Neon's serverless/WebSocket interface; arbitrary local PostgreSQL is not automatically interchangeable without connection changes.
-- A **private** Blob store dedicated to the environment, with its token only on the backend.
+- Node.js 24 and npm; CI and the standalone image use Node.js 24.
+- A separate development database. `DATABASE_DRIVER=neon` uses Neon WebSockets, `postgres` uses standard PostgreSQL TCP, and `sqlite` uses a local file. See the self-hosting guide for local options.
+- A **private** Blob store dedicated to the environment, or `STORAGE_DRIVER=local` with a dedicated private directory.
 - A development Clerk instance/keys to exercise accounts. Without them, anonymous sharing can work, but the account area is unavailable.
 
 Do not use production databases, buckets, or secrets for development or tests. A Git-ignored file is not safe to share or print. In particular, do not leave `.env.production.local` in a development checkout: the migration runner loads configuration through `@next/env`, whose selection may prioritize production files. Privately verify the effective target before migrating, without printing the connection string to logs.
@@ -352,28 +371,34 @@ Without the required configuration, pages may remain accessible, but sharing is 
 
 ### Environment variables
 
-| Variable                            | Purpose and precautions                                                                                                                                |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `APP_ORIGIN`                        | Canonical origin, for example `http://localhost:3000` in development. Production requires HTTPS; it participates in OPAQUE identity and origin checks. |
-| `DATABASE_URL`                      | Backend Neon connection; never expose it to the browser.                                                                                               |
-| `BLOB_READ_WRITE_TOKEN`             | Private-store access. Never use the `NEXT_PUBLIC_` prefix.                                                                                             |
-| `OPAQUE_SERVER_SETUP`               | Secret OPAQUE setup generated by the library. Preserve it to open existing records.                                                                    |
-| `OPAQUE_SETUP_VERSION`              | Identifies the setup version; defaults to `1`. Does not itself implement reads with multiple setups.                                                   |
-| `HANDSHAKE_SEAL_KEY`                | Encryption key for temporary authentication state.                                                                                                     |
-| `RATE_LIMIT_HMAC_KEY`               | Secret for pseudonymizing rate-limit identities.                                                                                                       |
-| `CRON_SECRET`                       | Authorizes the cleanup route; send only as a backend credential.                                                                                       |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Publishable key for the environment's Clerk instance; may be included in the client bundle.                                                            |
-| `CLERK_SECRET_KEY`                  | Clerk secret key, backend only.                                                                                                                        |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL`     | Sign-in route: `/sign-in`.                                                                                                                             |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL`     | Sign-up route: `/sign-up`.                                                                                                                             |
+| Variable                            | Purpose and precautions                                                                                                                                                                                   |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ORIGIN`                        | Canonical origin, for example `http://localhost:3000` in development. Public production origins require HTTPS; standalone loopback HTTP is allowed. It participates in OPAQUE identity and origin checks. |
+| `DATABASE_DRIVER`                   | `neon` by default; also supports `postgres` and `sqlite`.                                                                                                                                                 |
+| `STORAGE_DRIVER`                    | `vercel-blob` by default, or `local`.                                                                                                                                                                     |
+| `AUTH_PROVIDER`                     | `clerk` by default; `none` explicitly disables account authentication.                                                                                                                                    |
+| `SQLITE_PATH`                       | Local database path; `:memory:` requires `ALLOW_EPHEMERAL_DATABASE=true`.                                                                                                                                 |
+| `LOCAL_STORAGE_PATH`                | Dedicated private ciphertext directory for local storage.                                                                                                                                                 |
+| `CLEANUP_INTERVAL_SECONDS`          | Standalone timer, `0` by default outside Docker; Docker uses `300`. Vercel keeps external cron.                                                                                                           |
+| `DATABASE_URL`                      | Backend PostgreSQL connection for Neon or standard TCP; never expose it to the browser.                                                                                                                   |
+| `BLOB_READ_WRITE_TOKEN`             | Private-store access. Never use the `NEXT_PUBLIC_` prefix.                                                                                                                                                |
+| `OPAQUE_SERVER_SETUP`               | Secret OPAQUE setup generated by the library. Preserve it to open existing records.                                                                                                                       |
+| `OPAQUE_SETUP_VERSION`              | Identifies the setup version; defaults to `1`. Does not itself implement reads with multiple setups.                                                                                                      |
+| `HANDSHAKE_SEAL_KEY`                | Encryption key for temporary authentication state.                                                                                                                                                        |
+| `RATE_LIMIT_HMAC_KEY`               | Secret for pseudonymizing rate-limit identities.                                                                                                                                                          |
+| `CRON_SECRET`                       | Authorizes the cleanup route; send only as a backend credential.                                                                                                                                          |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Publishable key for the environment's Clerk instance; may be included in the client bundle.                                                                                                               |
+| `CLERK_SECRET_KEY`                  | Clerk secret key, backend only.                                                                                                                                                                           |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL`     | Sign-in route: `/sign-in`.                                                                                                                                                                                |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL`     | Sign-up route: `/sign-up`.                                                                                                                                                                                |
 
 Do not copy real values into the README, issues, screenshots, fixtures, or CI output. Different environments must have different secrets. A preview must not automatically receive production infrastructure.
 
 ### Migrations
 
-`npm run db:migrate` applies numbered files from `migrations/` in order, within a transaction using an advisory lock and `schema_migrations` tracking. Applied migrations do not run again. Future changes should add a new file rather than rewrite applied history.
+`npm run db:migrate` applies numbered PostgreSQL files from `migrations/` in order, within a transaction using an advisory lock and `schema_migrations` tracking. Applied migrations do not run again. Future changes should add a new file rather than rewrite applied history.
 
-Builds and requests do not run migrations automatically. Changes that depend on new columns must coordinate database migration with code deployment. A fresh-database CI test does not mean the production schema has been updated.
+PostgreSQL builds and requests do not run migrations automatically. SQLite applies its separate `migrations/sqlite/` files transactionally when opened, including standalone startup. Changes that depend on new columns must coordinate database migration with code deployment. A fresh-database CI test does not mean the production schema has been updated.
 
 ## Deployment and operations
 
@@ -407,36 +432,41 @@ Useful operational signals include the latest successful cleanup, queue age, `li
 
 ## Repository structure and API
 
-| Path                           | Responsibility                                                 |
-| ------------------------------ | -------------------------------------------------------------- |
-| `src/app/`                     | Pages, layouts, and HTTP routes.                               |
-| `src/components/`              | Creation, retrieval, history, and revocation interfaces.       |
-| `src/workers/crypto.worker.ts` | Browser OPAQUE and cryptographic execution.                    |
-| `src/lib/crypto.ts`            | Encrypted format, DEK wrapping, and decryption.                |
-| `src/lib/protocol.ts`          | Shared limits and types; version and OPAQUE profile.           |
-| `src/server/artifacts.ts`      | State machine, authorizations, counters, and deletion.         |
-| `src/server/accounts.ts`       | Clerk identity and immutable username.                         |
-| `src/server/storage.ts`        | Private Blob access and inventory.                             |
-| `src/server/daily-cleanup.ts`  | Cleanup draining within a work budget.                         |
-| `src/proxy.ts`                 | CSP, nonce, cache, and session integration on relevant routes. |
-| `migrations/` and `scripts/`   | Versioned schema, migrations, and initial secret generation.   |
-| `tests/`                       | Cryptography, service, HTTP, and concurrency tests.            |
-| `.github/workflows/ci.yml`     | Automated validation on Node.js 24 and PostgreSQL 17.          |
+| Path                                        | Responsibility                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/app/`                                  | Pages, layouts, and HTTP routes.                                                 |
+| `src/components/`                           | Creation, retrieval, history, and revocation interfaces.                         |
+| `src/workers/crypto.worker.ts`              | Browser OPAQUE and cryptographic execution.                                      |
+| `src/lib/crypto.ts`                         | Encrypted format, DEK wrapping, and decryption.                                  |
+| `src/lib/protocol.ts`                       | Shared limits and types; version and OPAQUE profile.                             |
+| `src/server/artifacts.ts`                   | State machine, authorizations, counters, and deletion.                           |
+| `src/server/accounts.ts`                    | Clerk identity and immutable username.                                           |
+| `src/server/database/`                      | Neon/TCP PostgreSQL connections, SQLite transactions, and shared database types. |
+| `src/server/storage/local.ts`               | Private filesystem ciphertext storage and bounded atomic uploads.                |
+| `Dockerfile`, `compose.yaml`, and `docker/` | Standalone image, durable volume, and runtime secret initialization.             |
+| `src/server/storage.ts`                     | Private Blob access and inventory.                                               |
+| `src/server/daily-cleanup.ts`               | Cleanup draining within a work budget.                                           |
+| `src/proxy.ts`                              | CSP, nonce, cache, and session integration on relevant routes.                   |
+| `migrations/` and `scripts/`                | Versioned schema, migrations, and initial secret generation.                     |
+| `tests/`                                    | Cryptography, service, HTTP, and concurrency tests.                              |
+| `.github/workflows/ci.yml`                  | Automated validation on Node.js 24 and PostgreSQL 17.                            |
 
 The central tables are `accounts`, `artifacts`, `handshakes`, `rate_limits`, `cleanup_jobs`, `maintenance`, and `schema_migrations`. Plaintext messages and files are not stored in a database table.
 
-| Method and route                    | Purpose and authorization                                                    |
-| ----------------------------------- | ---------------------------------------------------------------------------- |
-| `POST /api/artifacts/reserve`       | Reservation and OPAQUE registration start; session required in account mode. |
-| `POST /api/artifacts/upload`        | Restricted token issuance and upload-SDK callbacks.                          |
-| `POST /api/artifacts/commit`        | One-time publication with management credential and object verification.     |
-| `POST /api/artifacts/access/start`  | Recipient authentication start; no content delivery.                         |
-| `POST /api/artifacts/access/finish` | Final proof, authorization consumption, and binary response.                 |
-| `POST /api/artifacts/access/visit`  | Aggregate page-open counting for account artifacts.                          |
-| `POST /api/artifacts/revoke`        | Revocation by management credential or owner session.                        |
-| `GET /api/account`                  | Cursor-paginated history of the authenticated account.                       |
-| `POST /api/account`                 | One-time username selection with a Clerk session.                            |
-| `GET /api/cron/cleanup`             | Maintenance protected by `Authorization: Bearer` using `CRON_SECRET`.        |
+| Method and route                    | Purpose and authorization                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| `POST /api/artifacts/reserve`       | Reservation and OPAQUE registration start; session required in account mode.             |
+| `POST /api/artifacts/upload`        | Restricted token issuance and upload-SDK callbacks.                                      |
+| `PUT /api/artifacts/upload/local`   | Local-mode-only upload with one-shot management authorization; unavailable in Blob mode. |
+| `GET /api/health`                   | Minimal configuration/database readiness check.                                          |
+| `POST /api/artifacts/commit`        | One-time publication with management credential and object verification.                 |
+| `POST /api/artifacts/access/start`  | Recipient authentication start; no content delivery.                                     |
+| `POST /api/artifacts/access/finish` | Final proof, authorization consumption, and binary response.                             |
+| `POST /api/artifacts/access/visit`  | Aggregate page-open counting for account artifacts.                                      |
+| `POST /api/artifacts/revoke`        | Revocation by management credential or owner session.                                    |
+| `GET /api/account`                  | Cursor-paginated history of the authenticated account.                                   |
+| `POST /api/account`                 | One-time username selection with a Clerk session.                                        |
+| `GET /api/cron/cleanup`             | Maintenance protected by `Authorization: Bearer` using `CRON_SECRET`.                    |
 
 Main pages are `/`, `/a/:id`, `/:username/:id`, `/app`, `/sign-in`, `/sign-up`, `/revogar`, and `/sobre`. APIs are internal to the application and subject to origin and credential checks; this table does not establish a public external-integration contract.
 
@@ -453,7 +483,7 @@ npm run build
 
 `npm run check` combines types, tests, and build; formatting has a separate command. The build uses Webpack, including the cryptographic Worker.
 
-SQL tests use PGlite by default. To run with real PostgreSQL and concurrent connections, configure `TEST_DATABASE_URL` with a **disposable** database, never production. The suite creates an isolated schema and removes it afterward. In CI, PostgreSQL 17 runs as a separate service.
+SQL tests use PGlite by default. `npm run test:sqlite` runs the same lifecycle/concurrency suite against SQLite; `sh scripts/test-docker.sh <local-image>` exercises the standalone image without outbound network access, including persistent and in-memory restart behavior. To run with real PostgreSQL and concurrent connections, configure `TEST_DATABASE_URL` with a **disposable** database, never production. The suite creates an isolated schema and removes it afterward. In CI, PostgreSQL 17 runs as a separate service.
 
 Tests exercise the actual OPAQUE library, export-key stability, incorrect passwords, cryptographic integrity and isolation, authentication before storage reads, replay, expiration, concurrent final access, revocation, kill-switch, abandoned challenges, account scoping, pagination, and cleanup retries. Simulated storage adapters and component tests have narrower scope than complete operations against actual providers.
 
@@ -473,6 +503,7 @@ Report security issues through a private channel with the maintainer, describing
 
 ### Documentation and references
 
+- [Self-hosting and standalone Docker](docs/self-hosting.md).
 - [Architecture decisions](docs/architecture.md).
 - [Implemented protocol](docs/protocol.md).
 - [Configuration and deployment](docs/deployment.md).

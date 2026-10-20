@@ -5,8 +5,11 @@ import { artifacts } from "@/server/services";
 import { AppError } from "@/server/errors";
 import { required } from "@/server/config";
 import { rateLimit, requestIdentity } from "@/server/rate-limit";
+import { storageDriver } from "@/lib/runtime-options";
 export const runtime = "nodejs";
 export const POST = route(async (request) => {
+  if (storageDriver() !== "vercel-blob")
+    throw new AppError(404, "UNAVAILABLE", "Indisponível.");
   const body = (await bodyJson(request)) as HandleUploadBody;
   if (body.type === "blob.generate-client-token") {
     sameOrigin(request);

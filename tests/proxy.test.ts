@@ -2,6 +2,27 @@ import { describe, expect, it, vi } from "vitest";
 import { NextRequest, type NextFetchEvent } from "next/server";
 import proxy from "@/proxy";
 describe("response security policy", () => {
+  it("keeps standalone loopback usable without permitting external providers", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("APP_ORIGIN", "http://localhost:3000");
+    vi.stubEnv("AUTH_PROVIDER", "none");
+    vi.stubEnv("STORAGE_DRIVER", "local");
+    try {
+      const response = await proxy(
+        new NextRequest("http://localhost:3000/sign-in"),
+        {} as NextFetchEvent,
+      );
+      const policy = response.headers.get("content-security-policy")!;
+      expect(policy).not.toContain("clerk.");
+      expect(policy).not.toContain("vercel.com");
+      expect(policy).not.toContain("upgrade-insecure-requests");
+      expect(policy).not.toContain("'unsafe-eval'");
+      expect(policy).toContain("worker-src 'self'");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
   it("generates a fresh CSP nonce, forwards it to rendering and prohibits embedding", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("CLERK_SECRET_KEY", "");

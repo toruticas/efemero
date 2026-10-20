@@ -1,3 +1,5 @@
+import { connectDatabase } from "@/server/database/connect";
+import { SQLiteDatabase } from "@/server/database/sqlite";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
@@ -9,6 +11,25 @@ export async function testDatabase(): Promise<{
   reset(): Promise<void>;
   close(): Promise<void>;
 }> {
+  if (process.env.TEST_DATABASE_DRIVER === "sqlite") {
+    const db = new SQLiteDatabase(":memory:");
+    return {
+      db,
+      reset: () =>
+        db.transaction(async (tx) => {
+          for (const table of [
+            "handshakes",
+            "cleanup_jobs",
+            "artifacts",
+            "accounts",
+            "rate_limits",
+            "maintenance",
+          ])
+            await tx.query(`DELETE FROM ${table}`);
+        }),
+      close: async () => db.close(),
+    };
+  }
   const directory = new URL("../migrations/", import.meta.url);
   const files = (await readdir(directory))
     .filter((name) => /^\d+_.*\.sql$/.test(name))
@@ -27,29 +48,9 @@ export async function testDatabase(): Promise<{
       max: 12,
       options: `-c search_path=${schema}`,
     });
-    const adapt = (client: Pick<Pool, "query">): QueryClient => ({
-      async query<T extends Row>(sql: string, values?: unknown[]) {
-        const r = await client.query(sql, values);
-        return { rows: r.rows as T[], rowCount: r.rowCount || 0 };
-      },
-    });
-    const db: Database = {
-      ...adapt(pool),
-      async transaction<T>(work: (tx: QueryClient) => Promise<T>) {
-        const client = await pool.connect();
-        try {
-          await client.query("BEGIN");
-          const result = await work(adapt(client as unknown as Pool));
-          await client.query("COMMIT");
-          return result;
-        } catch (e) {
-          await client.query("ROLLBACK");
-          throw e;
-        } finally {
-          client.release();
-        }
-      },
-    };
+    const connection = new URL(process.env.TEST_DATABASE_URL);
+    connection.searchParams.set("options", `-c search_path=${schema}`);
+    const db = connectDatabase("postgres", connection.toString());
     await pool.query(migration);
     return {
       db,
@@ -59,6 +60,7 @@ export async function testDatabase(): Promise<{
         );
       },
       close: async () => {
+        await db.close();
         await pool.end();
         await admin.query(`DROP SCHEMA ${schema} CASCADE`);
         await admin.end();
