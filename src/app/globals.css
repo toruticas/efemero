@@ -1689,3 +1689,22 @@ td {
     font-size: 13px;
   }
 }
+
+.language-selector {
+  max-width: 140px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .header nav {
+    gap: 10px;
+  }
+  .language-selector {
+    max-width: 114px;
+    font-size: 11px;
+  }
+}

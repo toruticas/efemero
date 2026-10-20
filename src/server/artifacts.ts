@@ -86,19 +86,19 @@ export class ArtifactService {
       throw new AppError(
         401,
         "ACCOUNT_REQUIRED",
-        "Entre na sua conta e escolha um username para continuar.",
+        "Sign in and choose a username to continue.",
       );
     if (input.mode === "anonymous" && input.slug)
       throw new AppError(
         400,
         "SLUG",
-        "Links anônimos usam um identificador aleatório.",
+        "Anonymous links use a random identifier.",
       );
     if (input.maxFailures != null && (input.mode !== "account" || !owner))
       throw new AppError(
         400,
         "POLICY",
-        "O kill-switch exige um artefato da sua conta.",
+        "The kill-switch requires an artifact from your account.",
       );
     if (
       input.maxFailures != null &&
@@ -106,7 +106,7 @@ export class ArtifactService {
         input.maxFailures < 1 ||
         input.maxFailures > 100)
     )
-      throw new AppError(400, "POLICY", "Escolha entre 1 e 100 falhas.");
+      throw new AppError(400, "POLICY", "Choose between 1 and 100 failures.");
     const now = this.clock(),
       id = randomUUID(),
       managementToken = randomToken();
@@ -127,7 +127,7 @@ export class ArtifactService {
         (input.mode === "account" ? MAX_FILE_BYTES : ANONYMOUS_FILE_BYTES) +
           CIPHER_OVERHEAD_BYTES
     )
-      throw new AppError(400, "SIZE", "Tamanho inválido.");
+      throw new AppError(400, "SIZE", "Invalid size.");
     await opaque.ready;
     let registrationResponse: string;
     try {
@@ -137,7 +137,7 @@ export class ArtifactService {
         registrationRequest: input.registrationRequest,
       }));
     } catch {
-      throw new AppError(400, "PROTOCOL", "Requisição criptográfica inválida.");
+      throw new AppError(400, "PROTOCOL", "Invalid cryptographic request.");
     }
     try {
       await this.db.transaction(async (tx) => {
@@ -151,7 +151,7 @@ export class ArtifactService {
           throw new AppError(
             429,
             "CAPACITY",
-            "O serviço atingiu o limite temporário de armazenamento.",
+            "The service has reached its temporary storage limit.",
           );
         if (input.mode === "account") {
           const own = await tx.query<{ total: string }>(
@@ -162,7 +162,7 @@ export class ArtifactService {
             throw new AppError(
               429,
               "QUOTA",
-              "Sua conta atingiu o limite de 50 artefatos ativos.",
+              "Your account has reached the limit of 50 active artifacts.",
             );
         }
         await tx.query(
@@ -190,7 +190,7 @@ export class ArtifactService {
         throw new AppError(
           409,
           "SLUG_TAKEN",
-          "Este endereço já foi usado. Escolha outro identificador.",
+          "This address has already been used. Choose another identifier.",
         );
       throw error;
     }
@@ -250,7 +250,7 @@ export class ArtifactService {
       throw new AppError(
         400,
         "UPLOAD",
-        "O upload não corresponde ao artefato reservado.",
+        "The upload does not match the reserved artifact.",
       );
     // Validate the record through the real protocol before accepting it. No
     // authentication or content release occurs during this structural check.
@@ -265,7 +265,7 @@ export class ArtifactService {
         identifiers: { client: a.id, server: this.settings.serverIdentity },
       });
     } catch {
-      throw new AppError(400, "PROTOCOL", "Registro criptográfico inválido.");
+      throw new AppError(400, "PROTOCOL", "Invalid cryptographic record.");
     }
     const result = await this.db.query(
       `UPDATE artifacts SET registration_record=$2,wrapped_key=$3::jsonb,blob_url=$4,state='ready'
@@ -360,11 +360,7 @@ export class ArtifactService {
           identifiers: { client: a.id, server: this.settings.serverIdentity },
         });
       } catch {
-        throw new AppError(
-          400,
-          "PROTOCOL",
-          "Requisição criptográfica inválida.",
-        );
+        throw new AppError(400, "PROTOCOL", "Invalid cryptographic request.");
       }
       const handshakeId = randomUUID();
       await tx.query(
@@ -392,7 +388,7 @@ export class ArtifactService {
       throw new AppError(
         429,
         "ATTEMPTS_PENDING",
-        "Há verificações em andamento. Aguarde até 2 minutos e tente novamente.",
+        "Checks are in progress. Wait up to 2 minutes and try again.",
       );
     return result;
   }
@@ -520,7 +516,7 @@ export class ArtifactService {
           JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")),
         );
       } catch {
-        throw new AppError(400, "CURSOR", "Página de histórico inválida.");
+        throw new AppError(400, "CURSOR", "Invalid history page.");
       }
     }
     const result = await this.db.query<Artifact>(

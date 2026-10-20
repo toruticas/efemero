@@ -9,13 +9,13 @@ import { storageDriver } from "@/lib/runtime-options";
 export const runtime = "nodejs";
 export const POST = route(async (request) => {
   if (storageDriver() !== "vercel-blob")
-    throw new AppError(404, "UNAVAILABLE", "Indisponível.");
+    throw new AppError(404, "UNAVAILABLE", "Unavailable.");
   const body = (await bodyJson(request)) as HandleUploadBody;
   if (body.type === "blob.generate-client-token") {
     sameOrigin(request);
     await rateLimit("upload-ip", requestIdentity(request), 20, 3600);
   } else if (body.type !== "blob.upload-completed")
-    throw new AppError(400, "UPLOAD", "Requisição inválida.");
+    throw new AppError(400, "UPLOAD", "Invalid request.");
   const result = await handleUpload({
     body,
     request,
@@ -25,7 +25,7 @@ export const POST = route(async (request) => {
         throw new AppError(
           400,
           "UPLOAD",
-          "Uploads multipart não estão disponíveis nesta versão.",
+          "Multipart uploads are not available in this version.",
         );
       const input = z
         .strictObject({

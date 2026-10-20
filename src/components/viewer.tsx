@@ -1,4 +1,8 @@
 "use client";
+import type { Message } from "@/lib/i18n/messages";
+import { errorMessage } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n-provider";
+
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight,
@@ -27,12 +31,16 @@ export function Viewer({
   slug: string;
   configured: boolean;
 }) {
+  const { t, locale } = useI18n();
   const [password, setPassword] = useState(""),
     [show, setShow] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [payload, setPayload] = useState<ArtifactPayload | null>(null),
-    [stage, setStage] = useState("");
+    [stage, setStage] = useState<{
+      message: Message;
+      values?: Record<string, string | number>;
+    } | null>(null);
   const visited = useRef("");
   useEffect(() => {
     const path = `${namespace}/${slug}`;
@@ -50,7 +58,7 @@ export function Viewer({
     try {
       validatePassword(password);
       setBusy(true);
-      setStage("Validando sua senha sem enviá-la…");
+      setStage({ message: "Validating your password without sending it…" });
       session = new CryptoSession();
       const first = await session.run<{ startLoginRequest: string }>(
         "login-start",
@@ -74,9 +82,9 @@ export function Viewer({
           handshakeId: start.handshakeId,
           finishLoginRequest: proof.finishLoginRequest,
         }).catch(() => {});
-        throw new Error("Senha incorreta ou artefato indisponível.");
+        throw new Error(t("Incorrect password or unavailable artifact."));
       }
-      setStage("Recebendo o conteúdo criptografado…");
+      setStage({ message: "Receiving encrypted content…" });
       const response = await fetch("/api/artifacts/access/finish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,12 +93,12 @@ export function Viewer({
       });
       if (!response.ok) {
         const result = await response.json();
-        throw new Error(result.error || "Artefato indisponível.");
+        throw new Error(result.error || t("Artifact unavailable."));
       }
       const id = response.headers.get("x-artifact-id"),
         wrapped = response.headers.get("x-wrapped-key");
       if (id !== start.artifactId || !wrapped)
-        throw new Error("Não foi possível verificar a entrega.");
+        throw new Error(t("Could not verify the delivery."));
       const reader = response.body!.getReader(),
         chunks: Uint8Array[] = [];
       let length = 0;
@@ -100,7 +108,7 @@ export function Viewer({
         length += value.length;
         if (length > MAX_READ_CIPHER_BYTES) {
           await reader.cancel();
-          throw new Error("Artefato acima do limite permitido.");
+          throw new Error(t("Artifact exceeds the allowed size."));
         }
         chunks.push(value);
       }
@@ -110,7 +118,7 @@ export function Viewer({
         ciphertext.set(chunk, offset);
         offset += chunk.length;
       }
-      setStage("Descriptografando no seu dispositivo…");
+      setStage({ message: "Decrypting on your device…" });
       const content = await session.run<ArtifactPayload>("decrypt", {
         artifactId: id,
         ciphertext: ciphertext.buffer,
@@ -120,15 +128,11 @@ export function Viewer({
       });
       setPayload(content);
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Não foi possível abrir este artefato.",
-      );
+      setError(errorMessage(cause, locale));
     } finally {
       session?.close();
       setBusy(false);
-      setStage("");
+      setStage(null);
     }
   }
   function clear() {
@@ -142,7 +146,7 @@ export function Viewer({
       url = URL.createObjectURL(blob),
       link = document.createElement("a");
     link.href = url;
-    link.download = payload.name || "arquivo";
+    link.download = payload.name || t("file");
     link.rel = "noopener";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -153,11 +157,11 @@ export function Viewer({
         <span className="viewer-icon">
           <ShieldCheck size={28} />
         </span>
-        <p className="eyebrow">ABERTO NESTE DISPOSITIVO</p>
+        <p className="eyebrow">{t("OPENED ON THIS DEVICE")}</p>
         <h1>
           {payload.kind === "message"
-            ? "Uma mensagem para você."
-            : "Seu arquivo está pronto."}
+            ? t("A message for you.")
+            : t("Your file is ready.")}
         </h1>
         {payload.kind === "message" ? (
           <pre className="decrypted-message">
@@ -167,22 +171,29 @@ export function Viewer({
           <div className="received-file">
             <strong>{payload.name}</strong>
             <span className="muted">
-              {(payload.data.byteLength / 1024).toFixed(1)} KB
+              {(payload.data.byteLength / 1024).toLocaleString(locale, {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              })}{" "}
+              KB
             </span>
           </div>
         )}
         <div className="success-actions">
           <button className="button primary" onClick={download}>
             <Download size={17} />
-            {payload.kind === "message" ? "Salvar mensagem" : "Baixar arquivo"}
+            {payload.kind === "message"
+              ? t("Save message")
+              : t("Download file")}
           </button>
           <button className="button secondary" onClick={clear}>
-            <X size={16} /> Fechar conteúdo
+            <X size={16} /> {t("Close content")}
           </button>
         </div>
         <p className="small muted">
-          Este conteúdo já foi entregue. Fechá-lo não garante que você poderá
-          abri-lo novamente.
+          {t(
+            "This content has already been delivered. Closing it does not guarantee you can open it again.",
+          )}
         </p>
       </section>
     );
@@ -191,17 +202,18 @@ export function Viewer({
       <span className="viewer-icon">
         <LockKeyhole size={29} />
       </span>
-      <p className="eyebrow">COMPARTILHADO COM VOCÊ</p>
-      <h1>Você tem a chave.</h1>
+      <p className="eyebrow">{t("SHARED WITH YOU")}</p>
+      <h1>{t("You have the key.")}</h1>
       <p className="muted">
-        Digite a senha enviada pelo remetente. O conteúdo só será entregue
-        depois da autenticação.
+        {t(
+          "Enter the password sent by the sender. Content is delivered only after authentication.",
+        )}
       </p>
       <div className="artifact-address">
         /{namespace}/{slug}
       </div>
       <form onSubmit={open}>
-        <label htmlFor="access-password">Senha do artefato</label>
+        <label htmlFor="access-password">{t("Artifact password")}</label>
         <div className="password-input">
           <input
             autoFocus
@@ -213,12 +225,12 @@ export function Viewer({
             minLength={12}
             maxLength={256}
             autoComplete="off"
-            placeholder="Digite a senha recebida"
+            placeholder={t("Enter the password you received")}
             disabled={busy}
           />
           <button
             type="button"
-            aria-label={show ? "Ocultar senha" : "Mostrar senha"}
+            aria-label={show ? t("Hide password") : t("Show password")}
             className="icon-button"
             onClick={() => setShow(!show)}
           >
@@ -232,31 +244,35 @@ export function Viewer({
         >
           {busy ? (
             <>
-              <span className="spinner" /> Verificando…
+              <span className="spinner" /> {t("Verifying…")}
             </>
           ) : (
             <>
-              Abrir artefato <ArrowRight size={17} />
+              {t("Open artifact")} <ArrowRight size={17} />
             </>
           )}
         </button>
         {busy && (
           <p role="status" className="progress">
-            {stage}
+            {stage && t(stage.message, stage.values)}
           </p>
         )}
         {error && (
           <p role="alert" className="error">
-            {error}
+            {errorMessage(error, locale)}
           </p>
         )}
         {!configured && (
-          <p className="setup-note">O serviço ainda está sendo configurado.</p>
+          <p className="setup-note">
+            {t("The service is still being configured.")}
+          </p>
         )}
       </form>
       <p className="viewer-footnote">
-        <ShieldCheck size={16} /> A senha fica no navegador. Abrir esta página
-        não consome acesso.
+        <ShieldCheck size={16} />{" "}
+        {t(
+          "The password stays in your browser. Opening this page does not consume an access.",
+        )}
       </p>
     </section>
   );

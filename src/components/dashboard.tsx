@@ -1,17 +1,13 @@
 "use client";
+import { errorMessage } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n-provider";
+
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowUpRight, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { publicPath, type ArtifactSummary } from "@/lib/protocol";
 import { CreateForm } from "./create-form";
-const statuses: Record<string, string> = {
-  pending: "Preparando",
-  ready: "Disponível",
-  exhausted: "Limite atingido",
-  expired: "Expirado",
-  revoked: "Removido",
-  destroyed: "Kill-switch acionado",
-};
+
 type Data = {
   account: { id: string; username: string } | null;
   artifacts: ArtifactSummary[];
@@ -22,6 +18,15 @@ export function Dashboard({
 }: {
   sharingConfigured: boolean;
 }) {
+  const { t, locale } = useI18n();
+  const statuses: Record<string, string> = {
+    pending: t("Preparing"),
+    ready: t("Available"),
+    exhausted: t("Limit reached"),
+    expired: t("Expired"),
+    revoked: t("Removed"),
+    destroyed: t("Kill-switch triggered"),
+  };
   const [data, setData] = useState<Data | null>(null),
     [error, setError] = useState(""),
     [username, setUsername] = useState(""),
@@ -34,7 +39,7 @@ export function Dashboard({
       setError("");
       setData(await api<Data>("/api/account"));
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e, locale));
     }
   }
   async function loadMore() {
@@ -59,7 +64,7 @@ export function Dashboard({
           : page,
       );
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e, locale));
     } finally {
       setLoadingMore(false);
     }
@@ -74,7 +79,7 @@ export function Dashboard({
       await api("/api/account", { username });
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e, locale));
     } finally {
       setBusy(false);
     }
@@ -85,25 +90,26 @@ export function Dashboard({
         {error ? (
           <>
             <p role="alert" className="error">
-              {error}
+              {errorMessage(error, locale)}
             </p>
             <button className="button secondary" onClick={refresh}>
-              Tentar novamente
+              {t("Try again")}
             </button>
           </>
         ) : (
-          <p role="status">Carregando seu espaço…</p>
+          <p role="status">{t("Loading your space…")}</p>
         )}
       </div>
     );
   if (!data.account)
     return (
       <form className="onboarding" onSubmit={setName}>
-        <p className="eyebrow">SEU PRIMEIRO PASSO</p>
-        <h2>Como você quer aparecer?</h2>
+        <p className="eyebrow">{t("YOUR FIRST STEP")}</p>
+        <h2>{t("How would you like to appear?")}</h2>
         <p className="muted">
-          Seu username fará parte dos links compartilhados. Depois de definido,
-          não poderá ser alterado.
+          {t(
+            "Your username will be part of shared links. Once set, it cannot be changed.",
+          )}
         </p>
         <label htmlFor="username">Username</label>
         <div className="slug-input">
@@ -115,19 +121,21 @@ export function Dashboard({
             maxLength={24}
             value={username}
             onChange={(e) => setUsername(e.target.value.toLowerCase())}
-            placeholder="seu-nome"
+            placeholder={t("your-name")}
             required
           />
         </div>
         <p className="field-help">
-          De 3 a 24 caracteres: letras minúsculas, números, hífen ou sublinhado.
+          {t(
+            "3 to 24 characters: lowercase letters, numbers, hyphens or underscores.",
+          )}
         </p>
         <button className="button primary" disabled={busy}>
-          Definir username
+          {t("Set username")}
         </button>
         {error && (
           <p role="alert" className="error">
-            {error}
+            {errorMessage(error, locale)}
           </p>
         )}
       </form>
@@ -138,20 +146,20 @@ export function Dashboard({
         <span className="username-badge">@{data.account.username}</span>
         <div>
           <button className="button secondary" onClick={refresh}>
-            <RefreshCw size={15} /> Atualizar
+            <RefreshCw size={15} /> {t("Refresh")}
           </button>
           <button
             className="button primary"
             onClick={() => setCreating(!creating)}
           >
             <Plus size={16} />
-            {creating ? "Fechar criação" : "Novo artefato"}
+            {creating ? t("Close creator") : t("New artifact")}
           </button>
         </div>
       </div>
       {error && (
         <p role="alert" className="error">
-          {error}
+          {errorMessage(error, locale)}
         </p>
       )}
       {creating && (
@@ -165,16 +173,25 @@ export function Dashboard({
       )}
       <div className="history-card">
         <div className="card-heading">
-          <h2>Histórico de criação</h2>
+          <h2>{t("Creation history")}</h2>
           <span className="muted small">
-            {data.artifacts.length} artefatos listados
+            {t(
+              data.artifacts.length === 1
+                ? "{count} artifact listed"
+                : "{count} artifacts listed",
+              {
+                count: data.artifacts.length.toLocaleString(locale),
+              },
+            )}
           </span>
         </div>
         {data.artifacts.length === 0 ? (
           <div className="history-empty">
-            <h3>Seu primeiro artefato começa aqui.</h3>
+            <h3>{t("Your first artifact starts here.")}</h3>
             <p className="muted">
-              Crie um compartilhamento para acompanhar o prazo e as liberações.
+              {t(
+                "Create a share to track its deadline and authorized deliveries.",
+              )}
             </p>
           </div>
         ) : (
@@ -182,14 +199,14 @@ export function Dashboard({
             <table>
               <thead>
                 <tr>
-                  <th>Endereço</th>
-                  <th>Estado</th>
-                  <th>Aberturas da página</th>
-                  <th>Entregas autorizadas</th>
-                  <th>Falhas / kill-switch</th>
-                  <th>Expiração</th>
+                  <th>{t("Address")}</th>
+                  <th>{t("Status")}</th>
+                  <th>{t("Page opens")}</th>
+                  <th>{t("Authorized deliveries")}</th>
+                  <th>{t("Failures / kill-switch")}</th>
+                  <th>{t("Expiration")}</th>
                   <th>
-                    <span className="sr-only">Ações</span>
+                    <span className="sr-only">{t("Actions")}</span>
                   </th>
                 </tr>
               </thead>
@@ -206,7 +223,7 @@ export function Dashboard({
                         /{a.namespace}/{a.slug} <ArrowUpRight size={13} />
                       </a>
                       <span className="small muted">
-                        {new Date(a.createdAt).toLocaleDateString("pt-BR")}
+                        {new Date(a.createdAt).toLocaleDateString(locale)}
                       </span>
                     </td>
                     <td>
@@ -214,18 +231,18 @@ export function Dashboard({
                         {statuses[a.state]}
                       </span>
                     </td>
-                    <td>{a.accessCount}</td>
+                    <td>{a.accessCount.toLocaleString(locale)}</td>
                     <td>
-                      {a.releaseCount}
+                      {a.releaseCount.toLocaleString(locale)}
                       {a.maxReleases === null ? " / ∞" : ` / ${a.maxReleases}`}
                     </td>
                     <td>
                       {a.maxFailures === null
-                        ? "Desativado"
+                        ? t("Disabled")
                         : `${a.failedCount} / ${a.maxFailures}`}
                     </td>
                     <td>
-                      {new Date(a.expiresAt).toLocaleString("pt-BR", {
+                      {new Date(a.expiresAt).toLocaleString(locale, {
                         dateStyle: "short",
                         timeStyle: "short",
                       })}
@@ -234,13 +251,18 @@ export function Dashboard({
                       {["ready", "pending"].includes(a.state) && (
                         <button
                           className="icon-button danger"
-                          aria-label={`Bloquear e remover ${a.slug}`}
-                          title="Bloquear e remover definitivamente"
+                          aria-label={t("Block and remove {slug}", {
+                            slug: a.slug,
+                          })}
+                          title={t("Permanently block and remove")}
                           disabled={removing !== null}
                           onClick={async () => {
                             if (
                               !window.confirm(
-                                `Bloquear e remover /${a.namespace}/${a.slug}? Esta ação não pode ser desfeita.`,
+                                t(
+                                  "Block and remove /{namespace}/{slug}? This action cannot be undone.",
+                                  { namespace: a.namespace, slug: a.slug },
+                                ),
                               )
                             )
                               return;
@@ -249,7 +271,7 @@ export function Dashboard({
                               await api("/api/artifacts/revoke", { id: a.id });
                               await refresh();
                             } catch (e) {
-                              setError((e as Error).message);
+                              setError(errorMessage(e, locale));
                             } finally {
                               setRemoving(null);
                             }
@@ -272,16 +294,13 @@ export function Dashboard({
           disabled={loadingMore}
           onClick={loadMore}
         >
-          {loadingMore ? "Carregando…" : "Carregar mais artefatos"}
+          {loadingMore ? t("Loading…") : t("Load more artifacts")}
         </button>
       )}
       <p className="small muted">
-        As aberturas da página são uma estimativa e podem incluir recargas e
-        robôs. Entregas autorizadas consomem o limite, mesmo se a conexão for
-        interrompida; não confirmam descriptografia ou leitura. Não guardamos
-        conteúdo, senha nem histórico dos destinatários. Os metadados deixam de
-        ser listados 30 dias após a exclusão física. O bloqueio é definitivo e
-        agenda a remoção do conteúdo; nada pode ser editado.
+        {t(
+          "Page opens are estimates and may include reloads and bots. Authorized deliveries consume the limit even if the connection is interrupted; they do not confirm decryption or reading. We do not store recipient content, passwords or history. Metadata stops appearing here 30 days after physical deletion. Blocking is permanent and schedules content removal; nothing can be edited.",
+        )}
       </p>
     </>
   );

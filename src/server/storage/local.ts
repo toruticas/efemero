@@ -86,7 +86,7 @@ export class LocalStorage implements Storage {
           throw new AppError(
             413,
             "TOO_LARGE",
-            "O arquivo excede o limite permitido.",
+            "The file exceeds the allowed size.",
           );
         await handle.writeFile(chunk.value);
       }
@@ -94,7 +94,7 @@ export class LocalStorage implements Storage {
         throw new AppError(
           400,
           "UPLOAD",
-          "O upload foi interrompido ou é inválido.",
+          "The upload was interrupted or is invalid.",
         );
       await handle.sync();
       await link(temporary, destination); // Atomic, and never replaces an object.

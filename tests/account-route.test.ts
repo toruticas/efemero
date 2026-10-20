@@ -34,7 +34,7 @@ describe("account HTTP authorization and immutable controls", () => {
   });
   it("does not query history without a verified session", async () => {
     mocks.current.mockRejectedValue(
-      new AppError(401, "LOGIN_REQUIRED", "Sign in to your account."),
+      new AppError(401, "LOGIN_REQUIRED", "Sign in to continue."),
     );
     expect(
       (await GET(new Request(`${origin}/api/account?ownerId=another`))).status,

@@ -1,3 +1,4 @@
+import { browserLocale, translator } from "./i18n";
 export class CryptoSession {
   private worker: Worker;
   private requests = new Map<
@@ -13,12 +14,23 @@ export class CryptoSession {
     this.worker.onmessage = ({ data }) => {
       const request = this.requests.get(data.requestId);
       this.requests.delete(data.requestId);
-      if (data.error) request?.reject(new Error(data.error));
+      if (data.error)
+        request?.reject(
+          new Error(
+            translator(browserLocale())(
+              "Could not protect or open the content. Check the password and try again.",
+            ),
+          ),
+        );
       else request?.resolve(data.result);
     };
     this.worker.onerror = () =>
       this.close(
-        new Error("Seu navegador não conseguiu iniciar a criptografia."),
+        new Error(
+          translator(browserLocale())(
+            "Your browser could not start encryption.",
+          ),
+        ),
       );
   }
   run<T>(action: string, data: unknown): Promise<T> {
@@ -31,7 +43,7 @@ export class CryptoSession {
       this.worker.postMessage({ requestId, action, data });
     });
   }
-  close(reason = new Error("Operação encerrada.")) {
+  close(reason = new Error(translator(browserLocale())("Operation ended."))) {
     this.worker.terminate();
     for (const request of this.requests.values()) request.reject(reason);
     this.requests.clear();

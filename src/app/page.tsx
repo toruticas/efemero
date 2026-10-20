@@ -1,32 +1,32 @@
+import { getI18n } from "@/lib/i18n/server";
 import { ArrowDown, CircleCheck, Fingerprint, Timer } from "lucide-react";
 import { CreateForm } from "@/components/create-form";
 import { configurationStatus } from "@/server/config";
-export default function Home() {
+export default async function Home() {
+  const { t } = await getI18n();
   const configured = configurationStatus().sharing;
   return (
     <>
       <section className="hero">
         <div className="hero-copy">
           <p className="eyebrow">
-            <span className="tiny-line" /> PRIVADO POR PRINCÍPIO. TEMPORÁRIO POR
-            ESCOLHA.
+            <span className="tiny-line" />{" "}
+            {t("PRIVATE BY PRINCIPLE. TEMPORARY BY CHOICE.")}
           </p>
           <h1>
-            Compartilhe o momento.
-            <br />
-            <span>Deixe o resto desaparecer.</span>
+            {t("Share the moment.")} <br />
+            <span>{t("Let the rest disappear.")}</span>
           </h1>
           <p className="hero-description">
-            Uma mensagem, um arquivo, um segredo.
-            <br />
-            Você escolhe quem pode abrir — e até quando.
+            {t("A message, a file, a secret.")} <br />
+            {t("You choose who can open it — and until when.")}
           </p>
           <div className="hero-pills">
             <span>
-              <Fingerprint size={15} /> Senha só no navegador
+              <Fingerprint size={15} /> {t("Password stays in your browser")}
             </span>
             <span>
-              <Timer size={15} /> Prazo definido por você
+              <Timer size={15} /> {t("A deadline you control")}
             </span>
           </div>
         </div>
@@ -42,52 +42,55 @@ export default function Home() {
             <div className="artifact-seal">
               <Fingerprint size={47} strokeWidth={1.2} />
             </div>
-            <span>ACESSO PROTEGIDO</span>
+            <span>{t("PROTECTED ACCESS")}</span>
           </div>
           <span className="floating-tag tag-top">
-            <span className="status-dot" /> Criptografado aqui
+            <span className="status-dot" /> {t("Encrypted here")}
           </span>
           <span className="floating-tag tag-bottom">
-            <CircleCheck size={14} /> Só com a sua senha
+            <CircleCheck size={14} /> {t("Only with your password")}
           </span>
           <span className="art-coordinate">01 — 256 BIT</span>
         </div>
       </section>
       <section className="section-intro">
         <span>
-          COMECE AQUI <ArrowDown size={14} />
+          {t("START HERE")} <ArrowDown size={14} />
         </span>
-        <p>Conteúdo privado. Regras claras.</p>
+        <p>{t("Private content. Clear rules.")}</p>
       </section>
       <CreateForm configured={configured} />
       <section className="assurances">
         <article>
           <span>01</span>
           <div>
-            <h3>Protegido antes de sair</h3>
+            <h3>{t("Protected before it leaves")}</h3>
             <p>
-              A criptografia acontece no seu navegador. O serviço recebe o
-              conteúdo já cifrado.
+              {t(
+                "Encryption happens in your browser. The service receives content that is already encrypted.",
+              )}
             </p>
           </div>
         </article>
         <article>
           <span>02</span>
           <div>
-            <h3>Senha para entregar</h3>
+            <h3>{t("A password before delivery")}</h3>
             <p>
-              A autenticação acontece antes do download. Conhecer o link não
-              basta.
+              {t(
+                "Authentication happens before download. Knowing the link is not enough.",
+              )}
             </p>
           </div>
         </article>
         <article>
           <span>03</span>
           <div>
-            <h3>Um fim definido</h3>
+            <h3>{t("An end you define")}</h3>
             <p>
-              Ao atingir o prazo ou o limite, novas entregas são bloqueadas e a
-              exclusão é agendada.
+              {t(
+                "Once the deadline or limit is reached, new deliveries are blocked and deletion is scheduled.",
+              )}
             </p>
           </div>
         </article>

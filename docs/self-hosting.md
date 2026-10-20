@@ -16,7 +16,7 @@ Open <http://localhost:3000>. The default Compose file binds port 3000 to host l
 
 On first startup, the entrypoint generates OPAQUE and service secrets and saves them in the named volume. It never prints their values. SQLite migrations run transactionally when the database is opened. An in-process task runs cleanup every five minutes; an external scheduler is optional.
 
-Repository documentation and operational messages use English. The product interface remains in Brazilian Portuguese.
+Repository documentation and operational messages use English. The product interface supports Brazilian Portuguese and English, including installations without Clerk or external services. Language detection and selection require no additional configuration or dependency.
 
 ## Build and run without Compose
 

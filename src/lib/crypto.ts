@@ -19,7 +19,7 @@ export function toBase64(bytes: Uint8Array): string {
     .replaceAll("=", "");
 }
 export function fromBase64(value: string): Uint8Array<ArrayBuffer> {
-  if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Formato inválido.");
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Invalid format.");
   return Uint8Array.from(
     atob(value.replaceAll("-", "+").replaceAll("_", "/")),
     (c) => c.charCodeAt(0),
@@ -55,7 +55,7 @@ export async function encryptArtifact(
     payload.data.byteLength >
     (payload.kind === "file" ? MAX_FILE_BYTES : MAX_MESSAGE_BYTES)
   )
-    throw new Error("O conteúdo excede o limite permitido.");
+    throw new Error("Content exceeds the allowed size.");
   const header = encoder.encode(
     JSON.stringify({
       kind: payload.kind,
@@ -109,7 +109,7 @@ export async function decryptArtifact(
     input[0] !== 1 ||
     wrapped.version !== 1
   )
-    throw new Error("Formato de artefato não suportado.");
+    throw new Error("Unsupported artifact format.");
   const rawKey = await crypto.subtle.decrypt(
     {
       name: "AES-GCM",
@@ -130,7 +130,7 @@ export async function decryptArtifact(
   );
   const length = new DataView(plaintext).getUint32(0);
   if (length > 2048 || length + 4 > plaintext.byteLength)
-    throw new Error("Cabeçalho inválido.");
+    throw new Error("Invalid header.");
   const h = JSON.parse(
     decoder.decode(new Uint8Array(plaintext, 4, length)),
   ) as Record<string, unknown>;
@@ -139,7 +139,7 @@ export async function decryptArtifact(
     typeof h.name !== "string" ||
     typeof h.mime !== "string"
   )
-    throw new Error("Conteúdo inválido.");
+    throw new Error("Invalid content.");
   const data = plaintext.slice(4 + length);
   new Uint8Array(plaintext).fill(0);
   return {

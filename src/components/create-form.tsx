@@ -1,4 +1,8 @@
 "use client";
+import type { Message } from "@/lib/i18n/messages";
+import { errorMessage } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n-provider";
+
 import { useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight,
@@ -54,6 +58,7 @@ export function CreateForm({
   account?: { username: string };
   onCreated?: () => void;
 }) {
+  const { t, locale } = useI18n();
   const [kind, setKind] = useState<"message" | "file">("message"),
     [message, setMessage] = useState(""),
     [file, setFile] = useState<globalThis.File | null>(null);
@@ -65,7 +70,10 @@ export function CreateForm({
     [failures, setFailures] = useState(""),
     [slug, setSlug] = useState("");
   const [busy, setBusy] = useState(false),
-    [progress, setProgress] = useState(""),
+    [progress, setProgress] = useState<{
+      message: Message;
+      values?: Record<string, string | number>;
+    } | null>(null),
     [error, setError] = useState(""),
     [result, setResult] = useState<
       (Reservation & { url: string; recipientPassword: string }) | null
@@ -109,21 +117,23 @@ export function CreateForm({
         ttlMinutes < 1 ||
         ttlMinutes > MAX_TTL_MINUTES
       )
-        throw new Error("Escolha um prazo entre 1 minuto e 7 dias.");
+        throw new Error(t("Choose a lifetime between 1 minute and 7 days."));
       const maxReleases = views === "" ? null : Number(views);
       if (
         maxReleases !== null &&
         (!Number.isInteger(maxReleases) || maxReleases < 1 || maxReleases > 100)
       )
-        throw new Error("Escolha entre 1 e 100 liberações.");
+        throw new Error(t("Choose between 1 and 100 deliveries."));
       const maxFailures = account && failures !== "" ? Number(failures) : null;
       if (
         maxFailures !== null &&
         (!Number.isInteger(maxFailures) || maxFailures < 1 || maxFailures > 100)
       )
-        throw new Error("Escolha entre 1 e 100 falhas para o kill-switch.");
+        throw new Error(
+          t("Choose between 1 and 100 failures for the kill-switch."),
+        );
       if (kind === "file" && (!file || file.size > maxFileBytes))
-        throw new Error(`Escolha um arquivo de até ${maxFileMB} MB.`);
+        throw new Error(t("The file exceeds the allowed size."));
       const data =
         kind === "message"
           ? new TextEncoder().encode(message).buffer
@@ -132,9 +142,9 @@ export function CreateForm({
         kind === "message" &&
         (!message.trim() || data.byteLength > MAX_MESSAGE_BYTES)
       )
-        throw new Error("Escreva uma mensagem de até 256 KB.");
+        throw new Error(t("Write a message of up to 256 KB."));
       setBusy(true);
-      setProgress("Preparando a proteção no seu navegador…");
+      setProgress({ message: "Preparing protection in your browser…" });
       session = new CryptoSession();
       const start = await session.run<{ registrationRequest: string }>(
         "register-start",
@@ -150,7 +160,9 @@ export function CreateForm({
         ...(account ? { maxFailures } : {}),
         ...start,
       });
-      setProgress("Criptografando. O conteúdo continua neste dispositivo…");
+      setProgress({
+        message: "Encrypting. Your content is still on this device…",
+      });
       const encrypted = await session.run<{
         ciphertext: ArrayBuffer;
         wrappedKey: WrappedKey;
@@ -161,7 +173,7 @@ export function CreateForm({
         serverIdentity: reservation.serverIdentity,
         payload: {
           kind,
-          name: kind === "file" ? file!.name : "mensagem.txt",
+          name: kind === "file" ? file!.name : t("message.txt"),
           mime:
             kind === "file"
               ? file!.type || "application/octet-stream"
@@ -169,7 +181,7 @@ export function CreateForm({
           data,
         },
       });
-      setProgress("Enviando o conteúdo já criptografado…");
+      setProgress({ message: "Uploading already encrypted content…" });
       if (reservation.uploadTransport === "local") {
         const response = await fetch(
           `/api/artifacts/upload/local?id=${encodeURIComponent(reservation.id)}`,
@@ -186,7 +198,7 @@ export function CreateForm({
         );
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.error || "Não foi possível enviar o arquivo.");
+          throw new Error(error.error || t("Could not upload the file."));
         }
       } else
         await upload(
@@ -204,12 +216,15 @@ export function CreateForm({
             }),
             multipart: false,
             onUploadProgress: (p) =>
-              setProgress(
-                `Enviando conteúdo criptografado… ${Math.round(p.percentage)}%`,
-              ),
+              setProgress({
+                message: "Uploading encrypted content… {percent}%",
+                values: {
+                  percent: Math.round(p.percentage),
+                },
+              }),
           },
         );
-      setProgress("Finalizando seu artefato…");
+      setProgress({ message: "Finalizing your artifact…" });
       await api("/api/artifacts/commit", {
         id: reservation.id,
         managementToken: reservation.managementToken,
@@ -229,11 +244,7 @@ export function CreateForm({
       setFile(null);
       if (fileInput.current) fileInput.current.value = "";
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Não foi possível criar o artefato.",
-      );
+      setError(errorMessage(cause, locale));
       if (reservation)
         void api("/api/artifacts/revoke", {
           id: reservation.id,
@@ -242,7 +253,7 @@ export function CreateForm({
     } finally {
       session?.close();
       setBusy(false);
-      setProgress("");
+      setProgress(null);
     }
   }
   async function copyLink() {
@@ -251,7 +262,7 @@ export function CreateForm({
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      setError("Não foi possível copiar. Selecione e copie o link abaixo.");
+      setError(t("Could not copy. Select and copy the link below."));
     }
   }
   function saveRecovery() {
@@ -272,7 +283,7 @@ export function CreateForm({
     const url = URL.createObjectURL(blob),
       a = document.createElement("a");
     a.href = url;
-    a.download = "artefato-revogacao.json";
+    a.download = t("artifact-revocation.json");
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -282,24 +293,28 @@ export function CreateForm({
         <span className="success-icon">
           <CheckCheck size={30} />
         </span>
-        <p className="eyebrow">PRONTO PARA COMPARTILHAR</p>
-        <h2>{revoked ? "Artefato revogado." : "O segredo está com você."}</h2>
+        <p className="eyebrow">{t("READY TO SHARE")}</p>
+        <h2>{revoked ? t("Artifact revoked.") : t("The secret is yours.")}</h2>
         <p className="muted">
           {revoked
-            ? "Novas entregas foram bloqueadas. A exclusão do conteúdo será concluída em segundo plano."
-            : "Compartilhe o link. Envie a senha por outro canal e guarde-a: ela não pode ser recuperada pelo serviço."}
+            ? t(
+                "New deliveries have been blocked. Content deletion will finish in the background.",
+              )
+            : t(
+                "Share the link. Send the password through another channel and keep it safe: the service cannot recover it.",
+              )}
         </p>
         <div className="share-box">
           <Link2 size={18} />
           <input
-            aria-label="Link do artefato"
+            aria-label={t("Artifact link")}
             value={result.url}
             readOnly
             onFocus={(e) => e.target.select()}
           />
           <button
             className="icon-button"
-            aria-label="Copiar link"
+            aria-label={t("Copy link")}
             onClick={copyLink}
           >
             {copied ? <Check size={18} /> : <Copy size={18} />}
@@ -307,7 +322,7 @@ export function CreateForm({
         </div>
         <div className="result-password">
           <label htmlFor="created-password">
-            Sua senha — disponível somente nesta tela
+            {t("Your password — available only on this screen")}
           </label>
           <div className="password-input">
             <input
@@ -320,7 +335,9 @@ export function CreateForm({
             <button
               type="button"
               className="icon-button"
-              aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+              aria-label={
+                showPassword ? t("Hide password") : t("Show password")
+              }
               onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -328,12 +345,12 @@ export function CreateForm({
             <button
               type="button"
               className="icon-button"
-              aria-label="Copiar senha"
+              aria-label={t("Copy password")}
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(result.recipientPassword);
                 } catch {
-                  setError("Selecione e copie a senha manualmente.");
+                  setError(t("Select and copy the password manually."));
                 }
               }}
             >
@@ -341,24 +358,28 @@ export function CreateForm({
             </button>
           </div>
           <p className="field-help">
-            Copie a senha antes de fechar esta tela e envie por outro canal. Ela
-            não foi enviada ao servidor.
+            {t(
+              "Copy the password before closing this screen and send it through another channel. It was not sent to the server.",
+            )}
           </p>
         </div>
         <p className="small muted">
-          Expira em {new Date(result.expiresAt).toLocaleString("pt-BR")}. Abrir
-          a página não consome uma liberação.
+          {t(
+            "Expires on {date}. Opening the page does not consume a delivery.",
+            { date: new Date(result.expiresAt).toLocaleString(locale) },
+          )}
         </p>
         <div className="recovery-note">
           <KeyRound size={20} />
           <div>
-            <strong>Guarde sua credencial de revogação</strong>
+            <strong>{t("Keep your revocation credential")}</strong>
             <p>
-              Ela permite bloquear o artefato antes do prazo. Mantenha este
-              arquivo com você.
+              {t(
+                "It lets you block the artifact before its deadline. Keep this file safe.",
+              )}
             </p>
             <button className="text-button" onClick={saveRecovery}>
-              <Download size={15} /> Salvar credencial
+              <Download size={15} /> {t("Save credential")}
             </button>
           </div>
         </div>
@@ -371,7 +392,7 @@ export function CreateForm({
               setError("");
             }}
           >
-            Criar outro artefato <ArrowRight size={17} />
+            {t("Create another artifact")} <ArrowRight size={17} />
           </button>
           <button
             className="button danger subtle"
@@ -384,16 +405,16 @@ export function CreateForm({
                 });
                 setRevoked(true);
               } catch (e) {
-                setError((e as Error).message);
+                setError(errorMessage(e, locale));
               }
             }}
           >
-            <Trash2 size={16} /> Revogar agora
+            <Trash2 size={16} /> {t("Revoke now")}
           </button>
         </div>
         {error && (
           <p role="alert" className="error">
-            {error}
+            {errorMessage(error, locale)}
           </p>
         )}
       </section>
@@ -404,12 +425,12 @@ export function CreateForm({
       <section className="composer-card">
         <div className="card-heading">
           <div>
-            <p className="eyebrow">NOVO ARTEFATO</p>
-            <h2>O que você quer compartilhar?</h2>
+            <p className="eyebrow">{t("NEW ARTIFACT")}</p>
+            <h2>{t("What would you like to share?")}</h2>
           </div>
           <span className="step-label">01 / 02</span>
         </div>
-        <div className="tabs" role="tablist" aria-label="Tipo do artefato">
+        <div className="tabs" role="tablist" aria-label={t("Artifact type")}>
           <button
             type="button"
             role="tab"
@@ -418,7 +439,7 @@ export function CreateForm({
             onClick={() => setKind("message")}
             disabled={busy}
           >
-            <FileText size={17} /> Mensagem
+            <FileText size={17} /> {t("Message")}
           </button>
           <button
             type="button"
@@ -428,26 +449,39 @@ export function CreateForm({
             onClick={() => setKind("file")}
             disabled={busy}
           >
-            <File size={17} /> Arquivo
+            <File size={17} /> {t("File")}
           </button>
         </div>
         {kind === "message" ? (
           <div className="message-input">
             <label className="sr-only" htmlFor="message">
-              Sua mensagem
+              {t("Your message")}
             </label>
             <textarea
               id="message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Uma mensagem que só precisa chegar a quem importa…"
+              placeholder={t(
+                "A message that only needs to reach the right person…",
+              )}
               maxLength={MAX_MESSAGE_BYTES}
               disabled={busy}
               required
             />
             <div className="input-caption">
-              <span>O conteúdo é criptografado antes de sair daqui.</span>
-              <span>{message.length.toLocaleString("pt-BR")} caracteres</span>
+              <span>
+                {t("Content is encrypted before it leaves this device.")}
+              </span>
+              <span>
+                {t(
+                  message.length === 1
+                    ? "{count} character"
+                    : "{count} characters",
+                  {
+                    count: message.length.toLocaleString(locale),
+                  },
+                )}
+              </span>
             </div>
           </div>
         ) : (
@@ -464,14 +498,19 @@ export function CreateForm({
               <span className="upload-icon">
                 <Upload size={25} />
               </span>
-              <strong>{file ? file.name : "Escolha um arquivo"}</strong>
+              <strong>{file ? file.name : t("Choose a file")}</strong>
               <span>
                 {file
-                  ? `${(file.size / 1024 / 1024).toFixed(2)} MB · clique para trocar`
-                  : `Qualquer formato, até ${maxFileMB} MB`}
+                  ? t("{size} MB · click to change", {
+                      size: (file.size / 1024 / 1024).toLocaleString(locale, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }),
+                    })
+                  : t("Any format, up to {size} MB", { size: maxFileMB })}
               </span>
               <span className="file-select">
-                Selecionar arquivo <ArrowRight size={15} />
+                {t("Select file")} <ArrowRight size={15} />
               </span>
             </label>
           </div>
@@ -479,9 +518,9 @@ export function CreateForm({
         <div className="password-section">
           <div className="field-title">
             <label htmlFor="password">
-              <KeyRound size={17} /> Senha de acesso
+              <KeyRound size={17} /> {t("Access password")}
             </label>
-            <span>Obrigatória</span>
+            <span>{t("Required")}</span>
           </div>
           <div className="password-row">
             <div className="password-input">
@@ -494,12 +533,14 @@ export function CreateForm({
                 maxLength={256}
                 required
                 autoComplete="new-password"
-                placeholder="Uma frase longa ou senha gerada"
+                placeholder={t("A long passphrase or generated password")}
                 disabled={busy}
               />
               <button
                 type="button"
-                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                aria-label={
+                  showPassword ? t("Hide password") : t("Show password")
+                }
                 className="icon-button"
                 onClick={() => setShowPassword(!showPassword)}
               >
@@ -512,18 +553,20 @@ export function CreateForm({
               onClick={generatePassword}
               disabled={busy}
             >
-              <RefreshCw size={15} /> Gerar
+              <RefreshCw size={15} /> {t("Generate")}
             </button>
           </div>
           <p className="field-help">
-            Mínimo de 12 caracteres. A senha é processada no seu navegador e não
-            é enviada à API.
+            {t(
+              "At least 12 characters. Your password is processed in your browser and is not sent to the API.",
+            )}
           </p>
         </div>
         {account && (
           <div className="slug-section">
             <label htmlFor="slug">
-              Endereço personalizado <span className="muted">(opcional)</span>
+              {t("Custom address")}{" "}
+              <span className="muted">{t("(optional)")}</span>
             </label>
             <div className="slug-input">
               <span>/{account.username}/</span>
@@ -533,35 +576,34 @@ export function CreateForm({
                 onChange={(e) => setSlug(e.target.value)}
                 pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,47}"
                 maxLength={48}
-                placeholder="identificador-aleatorio"
+                placeholder={t("random-identifier")}
                 disabled={busy}
               />
             </div>
             <p className="field-help">
-              Letras ASCII, números, hífen e sublinhado; até 48 caracteres. O
-              endereço será definitivo e não poderá ser reutilizado.
+              {t(
+                "ASCII letters, numbers, hyphens and underscores; up to 48 characters. The address is permanent and cannot be reused.",
+              )}
             </p>
           </div>
         )}
         <div className="local-note">
           <ShieldCheck size={17} />
           <span>
-            Mensagem, nome do arquivo e conteúdo protegidos no seu dispositivo.
+            {t("Message, filename and content protected on your device.")}
           </span>
         </div>
       </section>
       <aside className="policy-card">
         <div className="card-heading">
           <div>
-            <p className="eyebrow">SUAS REGRAS</p>
-            <h2>Até quando?</h2>
+            <p className="eyebrow">{t("YOUR RULES")}</p>
+            <h2>{t("Until when?")}</h2>
           </div>
           <Clock3 size={21} className="muted" />
         </div>
-        <p className="policy-intro">
-          Escolha quando o compartilhamento deve terminar.
-        </p>
-        <label htmlFor="ttl">Tempo de vida</label>
+        <p className="policy-intro">{t("Choose when sharing should end.")} </p>
+        <label htmlFor="ttl">{t("Lifetime")}</label>
         <div className="duration-input">
           <input
             id="ttl"
@@ -575,7 +617,7 @@ export function CreateForm({
             required
           />
           <select
-            aria-label="Unidade do tempo de vida"
+            aria-label={t("Lifetime unit")}
             value={unit}
             onChange={(e) => {
               setUnit(e.target.value);
@@ -589,15 +631,15 @@ export function CreateForm({
             }}
             disabled={busy}
           >
-            <option value="minutes">minutos</option>
-            <option value="hours">horas</option>
-            <option value="days">dias</option>
+            <option value="minutes">{t("minutes")}</option>
+            <option value="hours">{t("hours")}</option>
+            <option value="days">{t("days")}</option>
           </select>
         </div>
-        <p className="field-help">De 1 minuto a 7 dias.</p>
+        <p className="field-help">{t("From 1 minute to 7 days.")}</p>
         <div className="divider" />
         <label htmlFor="views">
-          Limite de acessos <span className="muted">(opcional)</span>
+          {t("Access limit")} <span className="muted">{t("(optional)")}</span>
         </label>
         <div className="views-input">
           <Eye size={17} />
@@ -607,21 +649,22 @@ export function CreateForm({
             min="1"
             max="100"
             step="1"
-            placeholder="Sem limite adicional"
+            placeholder={t("No additional limit")}
             value={views}
             onChange={(e) => setViews(e.target.value)}
             disabled={busy}
           />
         </div>
         <p className="field-help">
-          Cada entrega autorizada conta um acesso. Uma conexão interrompida pode
-          consumi-lo.
+          {t(
+            "Each authorized delivery counts as one access. An interrupted connection may consume it.",
+          )}
         </p>
         {account && (
           <>
             <div className="divider" />
             <label htmlFor="failures">
-              Kill-switch <span className="muted">(opcional)</span>
+              Kill-switch <span className="muted">{t("(optional)")}</span>
             </label>
             <div className="views-input">
               <ShieldCheck size={17} />
@@ -631,29 +674,30 @@ export function CreateForm({
                 min="1"
                 max="100"
                 step="1"
-                placeholder="Desativado"
+                placeholder={t("Disabled")}
                 value={failures}
                 onChange={(e) => setFailures(e.target.value)}
                 disabled={busy}
               />
             </div>
             <p className="field-help">
-              Exclui o artefato ao atingir este total de falhas, sem reiniciar
-              após acertos. Verificações abandonadas ou interrompidas contam
-              após 2 minutos. Qualquer pessoa com o link pode provocar a
-              exclusão deliberadamente.
+              {t(
+                "Deletes the artifact when this total number of failures is reached, without resetting after successful attempts. Abandoned or interrupted checks count after 2 minutes. Anyone with the link can deliberately trigger deletion.",
+              )}
             </p>
           </>
         )}
         <p className="field-help">
-          Conteúdo, endereço e regras não poderão ser alterados após a criação.
-          Você poderá bloquear e remover o artefato.
+          {t(
+            "Content, address and rules cannot be changed after creation. You can block and remove the artifact.",
+          )}
         </p>
         <div className="policy-summary">
           <span className="status-dot" />
           <p>
-            O que acontecer primeiro encerra o acesso: prazo, limite de entregas
-            ou kill-switch, quando definido.
+            {t(
+              "Access ends at whichever comes first: the deadline, delivery limit or kill-switch, when set.",
+            )}
           </p>
         </div>
         <button
@@ -663,34 +707,35 @@ export function CreateForm({
         >
           {busy ? (
             <>
-              <span className="spinner" /> Protegendo…
+              <span className="spinner" /> {t("Protecting…")}
             </>
           ) : (
             <>
-              <LockKeyhole size={17} /> Criar link seguro{" "}
+              <LockKeyhole size={17} /> {t("Create secure link")}{" "}
               <ArrowRight size={17} />
             </>
           )}
         </button>
         <p className="submit-note">
           {account
-            ? `Criado como @${account.username}`
-            : "Sem conta. Sem conteúdo em claro no servidor."}
+            ? t("Created as @{username}", { username: account.username })
+            : t("No account. No plaintext content on the server.")}
         </p>
         {busy && (
           <p className="progress" role="status">
-            {progress}
+            {progress && t(progress.message, progress.values)}
           </p>
         )}
         {error && (
           <p role="alert" className="error">
-            {error}
+            {errorMessage(error, locale)}
           </p>
         )}
         {!configured && (
           <p className="setup-note">
-            O compartilhamento será liberado após a configuração do
-            armazenamento e das chaves do serviço.
+            {t(
+              "Sharing will be enabled once storage and service keys have been configured.",
+            )}
           </p>
         )}
       </aside>

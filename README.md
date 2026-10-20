@@ -6,7 +6,7 @@ Temporary message and file sharing with browser-side encryption, password authen
 
 Recipients need the link and the artifact password. The URL contains no key, password, or secret fragment. The server controls new deliveries; no policy can erase a copy a recipient has already received.
 
-Repository documentation, code identifiers, comments, test descriptions, and maintainer-facing output use English. The product interface is currently in Brazilian Portuguese. Existing public routes and cryptographic protocol identifiers retain their original spelling for compatibility.
+Repository documentation, code identifiers, comments, test descriptions, and maintainer-facing output use English. The product interface supports Brazilian Portuguese and English. Existing public routes and cryptographic protocol identifiers retain their original spelling for compatibility. See [internationalization](docs/internationalization.md) for language selection and translation maintenance.
 
 Efemero also supports a single-container self-hosted installation with SQLite, local ciphertext storage, and no account provider. Cloud services are optional; the existing managed production deployment remains unchanged.
 
@@ -53,7 +53,7 @@ As of the 2026-10-19 verification:
 
 The project has not undergone an independent cryptographic audit. The limitations below are part of the security model even when every test passes. The [validation log](docs/validation.md) contains dated evidence; older entries describe the state at that time and may precede later fixes.
 
-The self-hosting update adds a 65-test suite exercised locally against PGlite and SQLite, an offline Docker smoke test with restart checks, and a real Chromium transfer of 2 MiB. Detailed evidence is recorded in the validation log. These checks do not replace the outstanding real-account Clerk validation.
+The current 70-test suite has been exercised locally against PGlite and SQLite, alongside an offline Docker smoke test with restart checks and real Chromium transfers of 2 MiB. Bilingual browser checks cover cross-language sharing, language persistence, and preserved draft/result state. Detailed evidence is recorded in the validation log. These checks do not replace the outstanding real-account Clerk validation.
 
 ## Product model
 

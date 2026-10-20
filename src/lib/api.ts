@@ -1,3 +1,4 @@
+import { browserLocale, errorMessage } from "./i18n";
 export async function api<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
@@ -7,7 +8,6 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     credentials: "same-origin",
   });
   const data = await response.json();
-  if (!response.ok)
-    throw new Error(data.error || "Não foi possível concluir a operação.");
+  if (!response.ok) throw new Error(errorMessage(data.error, browserLocale()));
   return data as T;
 }

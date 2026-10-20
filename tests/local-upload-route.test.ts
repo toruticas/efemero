@@ -50,7 +50,7 @@ describe("local upload HTTP boundary", () => {
   });
   it("never writes without a valid one-shot management permission", async () => {
     mocks.permit.mockRejectedValue(
-      new AppError(401, "UNAUTHORIZED", "Unavailable"),
+      new AppError(401, "UNAUTHORIZED", "Unavailable."),
     );
     expect((await PUT(request())).status).toBe(401);
     expect(mocks.write).not.toHaveBeenCalled();

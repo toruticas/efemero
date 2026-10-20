@@ -11,15 +11,11 @@ export async function clerkUserId() {
     throw new AppError(
       503,
       "ACCOUNTS_NOT_CONFIGURED",
-      "A área de contas ainda está sendo configurada. Você pode compartilhar anonimamente.",
+      "The account area is still being configured. You can share anonymously.",
     );
   const { userId } = await auth();
   if (!userId)
-    throw new AppError(
-      401,
-      "LOGIN_REQUIRED",
-      "Entre na sua conta para continuar.",
-    );
+    throw new AppError(401, "LOGIN_REQUIRED", "Sign in to continue.");
   return userId;
 }
 export async function currentAccount() {
@@ -32,7 +28,7 @@ export async function currentAccount() {
 }
 export async function createAccount(username: string) {
   if (RESERVED_NAMES.has(username))
-    throw new AppError(409, "USERNAME_TAKEN", "Este username está reservado.");
+    throw new AppError(409, "USERNAME_TAKEN", "This username is reserved.");
   const userId = await clerkUserId();
   try {
     const result = await getDatabase().query<Account>(
@@ -43,7 +39,7 @@ export async function createAccount(username: string) {
       throw new AppError(
         409,
         "USERNAME_FIXED",
-        "O username da conta já foi definido e não pode ser alterado.",
+        "The account username has already been set and cannot be changed.",
       );
     return result.rows[0];
   } catch (error) {
@@ -51,7 +47,7 @@ export async function createAccount(username: string) {
       throw new AppError(
         409,
         "USERNAME_TAKEN",
-        "Este username já está em uso.",
+        "This username is already in use.",
       );
     throw error;
   }

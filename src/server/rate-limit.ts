@@ -22,7 +22,7 @@ export async function rateLimit(
     throw new AppError(
       429,
       "RATE_LIMITED",
-      "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.",
+      "Too many attempts. Wait a few minutes before trying again.",
     );
 }
 export function requestIdentity(request: Request) {

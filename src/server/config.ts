@@ -12,7 +12,7 @@ export function required(name: string): string {
     throw new AppError(
       503,
       "NOT_CONFIGURED",
-      "O serviço ainda está sendo configurado. Tente novamente mais tarde.",
+      "The service is still being configured. Please try again later.",
     );
   return value;
 }
@@ -27,11 +27,7 @@ export function origin() {
     url.protocol !== "https:" &&
     !localHTTP
   )
-    throw new AppError(
-      503,
-      "NOT_CONFIGURED",
-      "Configuração de origem inválida.",
-    );
+    throw new AppError(503, "NOT_CONFIGURED", "Invalid origin configuration.");
   return url.origin;
 }
 export function configurationStatus() {

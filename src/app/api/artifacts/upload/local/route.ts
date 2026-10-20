@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 export const PUT = route(async (request) => {
   if (storageDriver() !== "local")
-    throw new AppError(404, "UNAVAILABLE", "Indisponível.");
+    throw new AppError(404, "UNAVAILABLE", "Unavailable.");
   sameOrigin(request);
   await rateLimit("upload-ip", requestIdentity(request), 20, 3600);
   const id = z.uuid().parse(new URL(request.url).searchParams.get("id"));
@@ -22,7 +22,7 @@ export const PUT = route(async (request) => {
     request.headers.get("content-type") !== "application/octet-stream" ||
     !request.body
   )
-    throw new AppError(415, "CONTENT_TYPE", "Formato de upload inválido.");
+    throw new AppError(415, "CONTENT_TYPE", "Invalid upload format.");
   const path = `artifacts/${id}/payload.bin`;
   const permission = await artifacts().issueUpload(id, token, path);
   await getStorage().write!(

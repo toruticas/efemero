@@ -68,7 +68,7 @@ self.onmessage = async (event: MessageEvent) => {
         result = { finishLoginRequest: login.finishLoginRequest };
       }
     } else if (action === "decrypt") {
-      if (!exportKey) throw new Error("Autenticação necessária.");
+      if (!exportKey) throw new Error("Authentication required.");
       result = await decryptArtifact(
         data.ciphertext,
         data.wrappedKey as WrappedKey,
@@ -76,7 +76,7 @@ self.onmessage = async (event: MessageEvent) => {
         data.artifactId,
       );
       exportKey = "";
-    } else throw new Error("Operação desconhecida.");
+    } else throw new Error("Unknown operation.");
     self.postMessage({ requestId, result });
   } catch {
     password = "";
@@ -86,7 +86,7 @@ self.onmessage = async (event: MessageEvent) => {
     self.postMessage({
       requestId,
       error:
-        "Não foi possível proteger ou abrir o conteúdo. Confira a senha e tente novamente.",
+        "Could not protect or open the content. Check the password and try again.",
     });
   }
 };

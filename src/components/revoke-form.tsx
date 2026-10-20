@@ -1,7 +1,11 @@
 "use client";
+import { errorMessage } from "@/lib/i18n";
+import { useI18n } from "@/components/i18n-provider";
+
 import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 export function RevokeForm() {
+  const { t, locale } = useI18n();
   const [id, setId] = useState(""),
     [token, setToken] = useState(""),
     [status, setStatus] = useState(""),
@@ -11,29 +15,31 @@ export function RevokeForm() {
     setBusy(true);
     try {
       await api("/api/artifacts/revoke", { id, managementToken: token });
-      setStatus("Artefato revogado. Novas entregas estão bloqueadas.");
+      setStatus(t("Artifact revoked. New deliveries are blocked."));
       setToken("");
     } catch (e) {
-      setStatus((e as Error).message);
+      setStatus(errorMessage(e, locale));
     } finally {
       setBusy(false);
     }
   }
   return (
     <form className="revoke-form" onSubmit={submit}>
-      <h2>Revogar um artefato anônimo</h2>
+      <h2>{t("Revoke an anonymous artifact")}</h2>
       <p className="muted">
-        Use os dados do arquivo de revogação salvo na criação.
+        {t(
+          "Use the details from the revocation file saved when you created it.",
+        )}
       </p>
-      <label htmlFor="revoke-id">Identificador interno</label>
+      <label htmlFor="revoke-id">{t("Internal identifier")}</label>
       <input
         id="revoke-id"
         value={id}
         onChange={(e) => setId(e.target.value)}
         required
-        placeholder="UUID do artefato"
+        placeholder={t("Artifact UUID")}
       />
-      <label htmlFor="revoke-token">Credencial de revogação</label>
+      <label htmlFor="revoke-token">{t("Revocation credential")}</label>
       <input
         id="revoke-token"
         type="password"
@@ -43,9 +49,9 @@ export function RevokeForm() {
         autoComplete="off"
       />
       <button className="button secondary" disabled={busy}>
-        Revogar artefato
+        {t("Revoke artifact")}
       </button>
-      {status && <p role="status">{status}</p>}
+      {status && <p role="status">{errorMessage(status, locale)}</p>}
     </form>
   );
 }

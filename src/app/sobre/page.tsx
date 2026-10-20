@@ -1,75 +1,67 @@
-export const metadata = { title: "Proteção e limites" };
-export default function About() {
+import { getI18n } from "@/lib/i18n/server";
+export async function generateMetadata() {
+  const { t } = await getI18n();
+  return { title: t("Protection and limits") };
+}
+export default async function About() {
+  const { t } = await getI18n();
   return (
     <article className="about-page">
-      <p className="eyebrow">COMO FUNCIONA</p>
-      <h1>Privacidade com regras claras.</h1>
-      <h2>O conteúdo é protegido no seu navegador</h2>
+      <p className="eyebrow">{t("HOW IT WORKS")}</p>
+      <h1>{t("Privacy with clear rules.")}</h1>
+      <h2>{t("Content is protected in your browser")}</h2>
       <p>
-        Mensagens, nomes originais e arquivos são criptografados antes do envio.
-        Uma chave aleatória protege cada artefato. O protocolo OPAQUE permite
-        usar sua senha para autenticar e recuperar essa chave sem enviar a senha
-        original à API.
+        {t(
+          "Messages, original filenames and files are encrypted before upload. A random key protects each artifact. The OPAQUE protocol lets you use your password to authenticate and recover that key without sending the original password to the API.",
+        )}
       </p>
-      <h2>O link é um endereço</h2>
+      <h2>{t("The link is an address")}</h2>
       <p>
-        Para receber o conteúdo, o destinatário precisa provar que conhece a
-        senha. O link não contém a senha ou uma chave secreta. Envie a senha por
-        um canal separado e prefira a senha gerada ou uma frase longa.
+        {t(
+          "To receive content, the recipient must prove they know the password. The link contains neither the password nor a secret key. Send the password through a separate channel and prefer a generated password or a long passphrase.",
+        )}
       </p>
-      <h2>O prazo bloqueia novas entregas</h2>
+      <h2>{t("The deadline blocks new deliveries")}</h2>
       <p>
-        Quando o prazo termina ou o limite de liberações é atingido, o serviço
-        bloqueia novas entregas. Uma rotina diária remove o conteúdo em segundo
-        plano, com novas tentativas quando necessário. A infraestrutura pode
-        levar algum tempo para remover todas as cópias internas e caches.
+        {t(
+          "When the deadline or delivery limit is reached, the service blocks new deliveries. A daily job removes content in the background, retrying when needed. The infrastructure may take some time to remove all internal copies and caches.",
+        )}
       </p>
-      <h2>Um acesso significa uma entrega autorizada</h2>
+      <h2>{t("One access means one authorized delivery")}</h2>
       <p>
-        Abrir a página não consome acesso. Uma liberação é contada antes de
-        iniciar a transferência. Uma conexão interrompida pode consumi-la. Não
-        conseguimos comprovar leitura humana ou apagar cópias já recebidas.
+        {t(
+          "Opening the page does not consume an access. A delivery is counted before the transfer starts. An interrupted connection may consume it. We cannot prove a person read the content or erase copies already received.",
+        )}
       </p>
-      <h2>Kill-switch opcional para sua conta</h2>
+      <h2>{t("Optional kill-switch for your account")}</h2>
       <p>
-        Na criação, você pode escolher a exclusão após um total de falhas.
-        Acertos não zeram esse total. Verificações abandonadas ou interrompidas
-        contam após 2 minutos. Qualquer pessoa com o link pode provocar a
-        exclusão deliberadamente. O bloqueio é definitivo; a remoção física
-        segue a rotina diária. Conteúdo, endereço e regras não podem ser
-        editados.
+        {t(
+          "At creation, you can choose deletion after a total number of failures. Successful attempts do not reset this total. Abandoned or interrupted checks count after 2 minutes. Anyone with the link can deliberately trigger deletion. Blocking is permanent; physical removal follows the daily cleanup. Content, address and rules cannot be edited.",
+        )}
       </p>
-      <h2>Arquivos pequenos, compartilhamento simples</h2>
+      <h2>{t("Small files, simple sharing")}</h2>
       <p>
-        Links anônimos aceitam arquivos de até 2 MB. No seu espaço autenticado,
-        o limite é 5 MB. Mensagens podem ter até 256 KB.
+        {t(
+          "Anonymous links accept files up to 2 MB. In your signed-in space, the limit is 5 MB. Messages can be up to 256 KB.",
+        )}
       </p>
-      <h2>Senhas e infraestrutura também têm limites</h2>
+      <h2>{t("Passwords and infrastructure also have limits")}</h2>
       <p>
-        Um comprometimento que obtenha os segredos OPAQUE e os registros do
-        servidor pode permitir testes offline de senhas. O operador do serviço
-        também possui capacidade técnica para testar palpites. Um navegador ou
-        código do site comprometido pode capturar dados durante o uso. OPAQUE
-        não elimina essas condições.
+        {t(
+          "A compromise that obtains the server's OPAQUE secrets and records may enable offline password guessing. The service operator also has the technical ability to test guesses. A compromised browser or website code can capture data during use. OPAQUE does not eliminate these conditions.",
+        )}
       </p>
-      <h2>Contas e histórico</h2>
+      <h2>{t("Accounts and history")}</h2>
       <p>
-        Clerk cuida do login. O histórico mantém endereço, tamanho, datas,
-        estado e contadores agregados, sem texto ou nome do arquivo em claro. O
-        username não pode ser alterado. Aberturas da página são uma estimativa,
-        incluindo recargas e possíveis robôs; entregas autorizadas não comprovam
-        descriptografia ou leitura. Não guardamos histórico de destinatários. O
-        vínculo do histórico com a conta é removido 30 dias após a exclusão do
-        conteúdo. O endereço permanece reservado para impedir que links antigos
-        apontem para outro artefato.
+        {t(
+          "Clerk handles sign-in. History keeps addresses, sizes, dates, status and aggregate counters, without plaintext content or filenames. Usernames cannot be changed. Page opens are estimates, including reloads and possible bots; authorized deliveries do not prove decryption or reading. We do not store recipient history. The link between history and the account is removed 30 days after content deletion. The address stays reserved to prevent old links from pointing to another artifact.",
+        )}
       </p>
-      <h2>Compartilhamento anônimo</h2>
+      <h2>{t("Anonymous sharing")}</h2>
       <p>
-        Não exige conta. A infraestrutura ainda processa informações como IP,
-        tamanho e horários. A aplicação usa identificadores derivados por HMAC
-        para seus limites de requisições; os provedores podem manter seus
-        próprios registros operacionais. Guarde a credencial de revogação
-        entregue na criação.
+        {t(
+          "No account is required. Infrastructure still processes information such as IP addresses, sizes and timestamps. The application uses HMAC-derived identifiers for request limits; providers may keep their own operational logs. Keep the revocation credential provided at creation.",
+        )}
       </p>
     </article>
   );

@@ -57,6 +57,6 @@ export function publicPath(namespace: string, slug: string) {
 export function validatePassword(password: string) {
   if (password.length < 12 || password.length > 256)
     throw new Error(
-      "Use uma senha de 12 a 256 caracteres. Prefira uma frase longa ou a senha gerada.",
+      "Use a password of 12 to 256 characters. Prefer a long passphrase or a generated password.",
     );
 }

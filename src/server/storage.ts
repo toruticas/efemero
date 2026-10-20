@@ -38,7 +38,7 @@ export const blobStorage: Storage = {
       throw new AppError(
         503,
         "PRIVATE_STORE_REQUIRED",
-        "O armazenamento privado ainda não foi configurado.",
+        "Private storage has not been configured yet.",
       );
     return result;
   },
@@ -49,7 +49,7 @@ export const blobStorage: Storage = {
       useCache: false,
     });
     if (!result || result.statusCode !== 200)
-      throw new AppError(503, "STORAGE", "Não foi possível iniciar a entrega.");
+      throw new AppError(503, "STORAGE", "Could not start delivery.");
     return result.stream;
   },
   async remove(path) {

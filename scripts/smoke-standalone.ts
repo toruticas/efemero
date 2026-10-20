@@ -182,7 +182,7 @@ async function main() {
   const health = await fetch(new URL("/api/health", base));
   assert.equal(health.status, 200);
   const home = await (await fetch(base)).text();
-  assert(!home.includes("Minha conta"));
+  assert(!home.includes('href="/app"'));
   assert.equal((await fetch(new URL("/api/account", base))).status, 503);
   const artifact = await create(1);
   const incorrect = await login(artifact, "an-incorrect-synthetic-password");
