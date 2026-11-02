@@ -341,6 +341,8 @@ The CSP uses a per-response nonce, `strict-dynamic`, explicit WASM support, and 
 
 Public pages do not mount `ClerkProvider`; the account flow loads its own services. CSP reduces some injection opportunities but cannot protect against malicious code authorized by a deployment or prove the absence of XSS in future changes.
 
+The homepage's **Why?** section (`/#why`) explains why application-layer encryption can reduce content exposure when HTTPS is inspected by a trusted intermediary. A trusted local certificate authority can let an intermediary terminate and inspect compatible TLS connections; this does not require breaking TLS cryptography. The benefit assumes Efemero's code is delivered intact. An active intermediary that changes that code, a privileged extension, or an endpoint agent can capture passwords or plaintext. This is not a guarantee of bypassing monitoring: domains, IP addresses, timing, sizes, and copies already received remain outside that promise. The public explanation presents these limits alongside the benefit, in Portuguese and English, below the sharing form.
+
 The service must not promise absolute “zero knowledge,” strong anonymity, irrecoverable erasure, or security independent of passwords, devices, and the operator. TLS remains mandatory for public production origins even with content encryption; only standalone loopback permits HTTP.
 
 ## Development and configuration

@@ -1,5 +1,35 @@
 // English source messages are stable, type-checked catalog keys.
 export const portuguese = {
+  "Why?": "Por quê?",
+  "WHY EFEMERO": "POR QUE O EFEMERO",
+  "Your content deserves another layer of privacy.":
+    "Seu conteúdo merece outra camada de privacidade.",
+  "HTTPS protects the connection. Efemero adds encryption to the message or file itself, in your browser, before upload.":
+    "O HTTPS protege a conexão. O Efemero adiciona criptografia à própria mensagem ou arquivo, no seu navegador, antes do envio.",
+  "When HTTPS is inspected": "Quando o HTTPS é inspecionado",
+  "On some networks, proxies and security agents use a certificate authority trusted by the device to inspect HTTPS connections. When they mediate a connection this way, they can read its requests and responses, even when the browser shows a secure connection.":
+    "Em algumas redes, proxies e agentes de segurança usam uma autoridade certificadora instalada como confiável no dispositivo para inspecionar conexões HTTPS. Quando intermediam uma conexão dessa forma, podem ler suas requisições e respostas, mesmo quando o navegador indica uma conexão segura.",
+  "With Efemero's code delivered intact, the artifact travels already encrypted. Observing that traffic alone does not reveal the message, file or original filename. The recipient uses the password to open the content in their browser.":
+    "Com o código do Efemero entregue sem alterações, o artefato trafega já criptografado. Observar apenas esse tráfego não revela a mensagem, o arquivo ou o nome original. O destinatário usa a senha para abrir o conteúdo no próprio navegador.",
+  "How the extra layer works": "Como a camada adicional funciona",
+  "Encrypt before sending": "Criptografe antes de enviar",
+  "The message, file and original filename are encrypted on the sender's device.":
+    "A mensagem, o arquivo e o nome original são criptografados no dispositivo de quem envia.",
+  "Transfer encrypted content": "Transfira conteúdo criptografado",
+  "The service receives ciphertext. HTTPS also protects the connection carrying it.":
+    "O serviço recebe o conteúdo cifrado. O HTTPS também protege a conexão que o transporta.",
+  "Open with the password": "Abra com a senha",
+  "Send the password through a separate, trusted channel. The recipient decrypts locally.":
+    "Envie a senha por um canal separado e confiável. O destinatário descriptografa localmente.",
+  "The browser and the code must also be trusted.":
+    "O navegador e o código também precisam ser confiáveis.",
+  "An intermediary that changes the site's code can capture the password and content before encryption. Extensions or agents with access to the device may also capture them.":
+    "Um intermediário que altere o código do site pode capturar a senha e o conteúdo antes da criptografia. Extensões ou agentes com acesso ao dispositivo também podem capturá-los.",
+  "Efemero does not guarantee bypassing monitoring. Metadata such as the domain, IP addresses, timing and traffic volume can still be visible. Copies already received cannot be erased remotely.":
+    "O Efemero não garante contornar monitoramento. Metadados como domínio, endereços IP, horários e volume de tráfego ainda podem ser visíveis. Cópias já recebidas não podem ser apagadas à distância.",
+  "Explore our protection and its limits":
+    "Conheça a proteção e os seus limites",
+
   "{count} character": "{count} caractere",
   "{count} artifact listed": "{count} artefato listado",
   Available: "Disponível",

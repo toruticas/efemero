@@ -1747,3 +1747,135 @@ td {
     font-size: 11px;
   }
 }
+
+.why-section {
+  margin: 0 0 64px;
+  padding-top: 48px;
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 24px;
+}
+.why-intro {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  align-items: end;
+  margin-bottom: 30px;
+}
+.why-intro .eyebrow {
+  margin-bottom: 14px;
+}
+.why-intro h2 {
+  max-width: 480px;
+  margin: 0;
+  font-size: clamp(27px, 3vw, 35px);
+  line-height: 1.2;
+}
+.why-lead,
+.why-context p,
+.why-flow p,
+.why-limits p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.why-lead {
+  margin: 0;
+}
+.why-context {
+  max-width: 820px;
+}
+.why-section h3 {
+  font-size: 16px;
+  letter-spacing: -0.2px;
+  margin-bottom: 10px;
+}
+.why-flow {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 28px 0;
+  padding: 0;
+}
+.why-flow li {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  padding: 24px;
+}
+.why-flow svg {
+  color: var(--green);
+  margin-bottom: 16px;
+}
+.why-flow p {
+  font-size: 12px;
+  margin-bottom: 0;
+}
+.why-limits {
+  display: flex;
+  gap: 16px;
+  padding: 24px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.why-limits > svg {
+  color: var(--green);
+  margin-top: 2px;
+}
+.why-limits p {
+  margin-bottom: 12px;
+}
+.why-details {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.why-link,
+.account-link {
+  white-space: nowrap;
+}
+@media (max-width: 680px) {
+  .why-intro,
+  .why-flow {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .why-section {
+    padding-top: 32px;
+    margin-bottom: 40px;
+  }
+  .why-limits {
+    padding: 20px;
+    gap: 12px;
+  }
+}
+@media (max-width: 460px) {
+  .header {
+    height: auto;
+    min-height: 78px;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px 0 6px;
+  }
+  .header nav {
+    flex-basis: 100%;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .why-link,
+  .account-link {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 900px) {
+  .header .header-note {
+    display: none;
+  }
+}

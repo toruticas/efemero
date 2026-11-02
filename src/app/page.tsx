@@ -1,5 +1,6 @@
 import { getI18n } from "@/lib/i18n/server";
 import { ArrowDown, CircleCheck, Fingerprint, Timer } from "lucide-react";
+import { WhySection } from "@/components/why-section";
 import { CreateForm } from "@/components/create-form";
 import { configurationStatus } from "@/server/config";
 export default async function Home() {
@@ -95,6 +96,7 @@ export default async function Home() {
           </div>
         </article>
       </section>
+      <WhySection />
     </>
   );
 }

@@ -18,8 +18,11 @@ export async function Header() {
         <span className="header-note">
           <span className="status-dot" /> {t("Encryption in your browser")}
         </span>
+        <a className="nav-link why-link" href="/#why">
+          {t("Why?")}
+        </a>
         {accountsEnabled() && (
-          <Link className="nav-link" href="/app">
+          <Link className="nav-link account-link" href="/app">
             {t("My account")} <ArrowUpRight size={15} />
           </Link>
         )}
