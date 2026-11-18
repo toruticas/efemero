@@ -2,6 +2,8 @@
 
 Temporary message and file sharing with browser-side encryption, password authentication before delivery, and server-enforced expiration policies.
 
+Current release: [v0.0.1](https://github.com/toruticas/efemero/releases/tag/v0.0.1). See the [changelog](CHANGELOG.md) for release notes.
+
 **Application:** [efemero.rafael.run](https://efemero.rafael.run). **Repository:** private, at `toruticas/efemero`. The project name, identifiers, and domain use the ASCII spelling `efemero`.
 
 Recipients need the link and the artifact password. The URL contains no key, password, or secret fragment. The server controls new deliveries; no policy can erase a copy a recipient has already received.
