@@ -17,7 +17,7 @@ export interface Storage {
     size: number;
     contentType: string;
   }>;
-  read(path: string): Promise<ReadableStream<Uint8Array>>;
+  read(path: string, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>>;
   remove(path: string): Promise<void>;
   inventory(cursor?: string): Promise<{ paths: string[]; cursor?: string }>;
 }
@@ -42,11 +42,12 @@ export const blobStorage: Storage = {
       );
     return result;
   },
-  async read(path) {
+  async read(path, signal) {
     const result = await get(path, {
       access: "private",
       token: required("BLOB_READ_WRITE_TOKEN"),
       useCache: false,
+      abortSignal: signal,
     });
     if (!result || result.statusCode !== 200)
       throw new AppError(503, "STORAGE", "Could not start delivery.");

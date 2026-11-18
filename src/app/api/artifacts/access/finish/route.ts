@@ -3,6 +3,7 @@ import { bodyJson, route, sameOrigin } from "@/server/http";
 import { artifacts } from "@/server/services";
 import { getStorage } from "@/server/storage";
 import { rateLimit, requestIdentity } from "@/server/rate-limit";
+import { readDelivery } from "@/server/delivery";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export const POST = route(async (request) => {
@@ -13,7 +14,11 @@ export const POST = route(async (request) => {
     input.handshakeId,
     input.finishLoginRequest,
   );
-  const stream = await getStorage().read(delivery.pathname);
+  const stream = await readDelivery(
+    getStorage(),
+    delivery.pathname,
+    request.signal,
+  );
   // A one-shot response: no reusable storage URL or bearer download token.
   return new Response(stream, {
     headers: {

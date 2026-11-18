@@ -47,6 +47,19 @@ describe("private local ciphertext storage", () => {
     await expect(storage.inspect(name)).rejects.toThrow();
     await expect(storage.read(name)).rejects.toThrow();
   });
+  it("aborts local delivery reads when their signal is cancelled", async () => {
+    const name = path();
+    await storage.write(name, body(1024 * 1024), 1024 * 1024);
+    const controller = new AbortController();
+    const stream = await storage.read(name, controller.signal);
+    controller.abort();
+    await expect(new Response(stream).arrayBuffer()).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    await expect(storage.read(name, controller.signal)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+  });
   it("enforces actual streamed bytes and removes incomplete uploads", async () => {
     const name = path();
     await expect(storage.write(name, body(65), 64)).rejects.toMatchObject({

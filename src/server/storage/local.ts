@@ -49,11 +49,18 @@ export class LocalStorage implements Storage {
       await handle.close();
     }
   }
-  async read(path: string) {
+  async read(path: string, signal?: AbortSignal) {
+    signal?.throwIfAborted();
     const handle = await this.file(path);
-    return Readable.toWeb(
-      handle.createReadStream(),
-    ) as ReadableStream<Uint8Array>;
+    try {
+      signal?.throwIfAborted();
+      return Readable.toWeb(
+        handle.createReadStream({ signal }),
+      ) as ReadableStream<Uint8Array>;
+    } catch (error) {
+      await handle.close();
+      throw error;
+    }
   }
   async write(
     path: string,

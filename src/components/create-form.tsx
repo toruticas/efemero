@@ -81,6 +81,7 @@ export function CreateForm({
     [copied, setCopied] = useState(false),
     [revoked, setRevoked] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const submissionInFlight = useRef(false);
   const maxFileBytes = account ? MAX_FILE_BYTES : ANONYMOUS_FILE_BYTES;
   const maxFileMB = maxFileBytes / 1024 / 1024;
   function generatePassword() {
@@ -105,6 +106,10 @@ export function CreateForm({
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
+    // State updates alone cannot block another submit before React re-renders.
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
+    setBusy(true);
     setError("");
     let session: CryptoSession | undefined,
       reservation: Reservation | undefined;
@@ -143,7 +148,6 @@ export function CreateForm({
         (!message.trim() || data.byteLength > MAX_MESSAGE_BYTES)
       )
         throw new Error(t("Write a message of up to 256 KB."));
-      setBusy(true);
       setProgress({ message: "Preparing protection in your browser…" });
       session = new CryptoSession();
       const start = await session.run<{ registrationRequest: string }>(
@@ -251,6 +255,7 @@ export function CreateForm({
           managementToken: reservation.managementToken,
         }).catch(() => {});
     } finally {
+      submissionInFlight.current = false;
       session?.close();
       setBusy(false);
       setProgress(null);

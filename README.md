@@ -55,7 +55,7 @@ As of the 2026-10-19 verification:
 
 The project has not undergone an independent cryptographic audit. The limitations below are part of the security model even when every test passes. The [validation log](docs/validation.md) contains dated evidence; older entries describe the state at that time and may precede later fixes.
 
-The current 70-test suite has been exercised locally against PGlite and SQLite, alongside an offline Docker smoke test with restart checks and real Chromium transfers of 2 MiB. Bilingual browser checks cover cross-language sharing, language persistence, and preserved draft/result state. Detailed evidence is recorded in the validation log. These checks do not replace the outstanding real-account Clerk validation.
+The current 87-test suite has been exercised locally against PGlite and SQLite. Earlier checks include an offline Docker smoke test with restart checks and real Chromium transfers of 2 MiB. Bilingual browser checks cover cross-language sharing, language persistence, and preserved draft/result state. Detailed evidence is recorded in the validation log. These checks do not replace the outstanding real-account Clerk validation.
 
 ## Product model
 
