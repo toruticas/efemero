@@ -144,8 +144,12 @@ export class ArtifactService {
         // Serialize capacity reservations; even simultaneous anonymous uploads
         // cannot race past the total storage budget (1 GiB for the initial MVP).
         await tx.query("SELECT pg_advisory_xact_lock(17420717)");
+        // An expired reservation that never authorized an upload has no blob.
+        // Keep charging issued uploads until storage confirms deletion.
         const capacity = await tx.query<{ used: string }>(
-          "SELECT COALESCE(sum(declared_size),0)::text AS used FROM artifacts WHERE purged_at IS NULL",
+          `SELECT COALESCE(sum(declared_size),0)::text AS used FROM artifacts
+           WHERE purged_at IS NULL AND (upload_issued OR pending_expires_at>$1)`,
+          [now],
         );
         if (Number(capacity.rows[0].used) + input.size > 1024 ** 3)
           throw new AppError(

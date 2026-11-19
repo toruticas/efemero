@@ -47,5 +47,10 @@
     "typescript": "7.0.2",
     "vitest": "5.0.5"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "@vercel/oidc": {
+      "@vercel/cli-config": "0.4.0"
+    }
+  }
 }
